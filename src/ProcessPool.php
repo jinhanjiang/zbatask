@@ -39,8 +39,7 @@ class ProcessPool extends Process
 	 * @var array
 	 */
 	private $waitSignalProcessPool = [
-		'signal'=>'',
-		'pool'=>[]
+		'signal'=>''
 	];
 
 	/**
@@ -263,17 +262,14 @@ class ProcessPool extends Process
 		{
 			// reload signal
 			case $this->signalSupport['reload']:
-				$allWorkers = [];
 				// push reload signal to the worker processes from the master process
 				foreach($this->workers as $taskId => $workers) {
 					foreach($workers as $pid => $worker) {	
 						$worker->pipeWrite('stop');
-						$allWorkers[$pid] = $worker;
 					}
 				}
 				$this->waitSignalProcessPool = [
 					'signal'=>'reload',
-					'pool'=>$allWorkers
 				];
 				break;
 			case $this->signalSupport['int']:
@@ -323,13 +319,8 @@ class ProcessPool extends Process
 						$worker->clearPipe();
 						unset($this->workers[$taskId][$res]);
 
-						if($this->waitSignalProcessPool['signal'] === 'reload')
-						{
-							if(array_key_exists($res, $this->waitSignalProcessPool['pool'])) {
-								unset($this->waitSignalProcessPool['pool'][$res]);
-								// fork a new worker
-								$this->fork($this->tasks[$taskId]);
-							}
+						if($this->waitSignalProcessPool['signal'] === 'reload') {
+							$this->fork($this->tasks[$taskId]);
 						}
 
 					}
@@ -342,14 +333,7 @@ class ProcessPool extends Process
 					}
 				}
 			}
-			if($this->waitSignalProcessPool['signal'] === 'stop')
-			{
-				// all worker stop then stop the master process
-				if(empty($this->waitSignalProcessPool['pool'])) {
-					$this->stop();
-				}
-			}
-
+			
 			// Prevent CPU utilization from reaching 100%.
 			usleep(self::$hangupLoopMicrotime);
 		}

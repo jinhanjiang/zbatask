@@ -2,6 +2,7 @@
 Multi-process task framework for PHP.
 
 Php version requires 5.4+, support php7
+The program can run under linux and mac system, you need to install php extension pcntl, posix
 
 You first need to create the task you want to perform, and you can quickly create an instance through the command.
 

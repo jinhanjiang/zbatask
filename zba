@@ -109,13 +109,13 @@ PHP_CODE;
 			/**
 			 * example:
 			 *
-			 $task = new Task();
-			 $task->name = 'MyTask';
-			 $task->count = 2;
-			 $task->closure = function($worker) {
-				file_put_contents(__DIR__."/w-{$worker->pid}.log", date('Y-m-d H:i:s').PHP_EOL, 8);
-				usleep(1000000);	
-			 };
+			 * $task = new Task();
+			 * $task->name = 'MyTask';
+			 * $task->count = 2;
+			 * $task->closure = function($worker) {
+			 *	file_put_contents(__DIR__."/w-{$worker->pid}.log", date('Y-m-d H:i:s').PHP_EOL, 8);
+			 *	usleep(1000000);	
+			 * };
 			 * $tasks = [	
 			 * 		$task,
 			 * 		new DefaultTask()

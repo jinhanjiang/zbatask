@@ -1,0 +1,174 @@
+#!/usr/local/php/bin/php
+<?php
+use Zba\ProcessPool;
+use Zba\Task;
+
+function help() 
+{
+	$version = ProcessPool::$version;
+	$string = <<<HELP
+\033[36mMulti-process task framework for PHP.\033[0m
+\033[36mZba Version $version\033[0m\n
+\033[33mStart/Stop: \nphp zba (start|stop), Example: \nphp zba start\033[0m\n
+\033[33mCreate default task file use: \nphp zba --create-default-task-file\033[0m\n\n
+HELP;
+	die($string);
+}
+spl_autoload_register('autoload');
+function autoload($class)
+{
+	$classInfo = explode('\\', $class);
+	$className = array_pop($classInfo);
+
+	$classInfo = array_map('strtolower', $classInfo);
+	array_push($classInfo, $className);
+
+	$class = implode('\\', $classInfo);
+	$class = str_replace('zba', 'src', $class);
+	$classFile = __DIR__.'/'.str_replace('\\', '/', $class).'.php';
+	require($classFile);
+}
+
+
+/**
+ * get arguments list
+ */
+if(count($argv) === 1) {
+	help();
+}
+else
+{
+	// preg_match_all(pattern, subject, matches)
+
+	foreach($argv as $arg)
+	{
+		preg_match_all('/^--(.*)/', $arg, $match);
+		if(isset($match[1][0]) && ! empty($match[1][0]))
+		{
+			$match = explode('=', $match[1][0]);
+			if($match[0] === 'help') {
+				help();
+			}
+			if($match[0] === 'create-default-task-file') {
+				$defaultTask =<<<PHP_CODE
+<?php
+namespace Task;
+
+use Zba\Process;
+use Zba\Task;
+
+class DefaultTask extends Task
+{
+	public function __construct() {
+		\$this->count = 2;
+		\$this->name = 'DefaultTask';
+		\$this->closure = \$this->run();
+		parent::__construct();
+	}
+
+	public function run()
+	{
+		return function(Process \$worker) 
+		{
+			file_put_contents(__DIR__."/w-{\$worker->pid}.log", date('Y-m-d H:i:s').PHP_EOL, 8);
+			usleep(1000000);
+		};
+	}
+}
+PHP_CODE;
+				$taskDir = __DIR__.'/task'; if(! is_dir($taskDir)) mkdir($taskDir, 0777);
+				$defaultTaskFile = $taskDir.'/DefaultTask.php';
+				if(is_file($defaultTaskFile)) {
+					die("\033[31mThe default task file [task/DefaultTask.php] already exists.\033[0m\n");
+				}
+				file_put_contents($defaultTaskFile, $defaultTask);
+				die("\033[32mThe default task file [task/DefaultTask.php] generates success.\033[0m\n");
+			}
+			if(isset($match[1])) {
+				$input[$match[0]] = $match[1];
+			}
+		}
+	}
+
+	// php -f zba start,  cause $argv like: ['zba', 'start']
+	$command = $argv[1]; $pidFile = __DIR__.'/zba.pid';
+	$masterPid = is_file($pidFile) ? file_get_contents($pidFile) : 0;
+    $masterIsAlive = $masterPid && @posix_kill($masterPid, 0) && posix_getpid() != $masterPid;
+    // Master is still alive?
+    if ($masterIsAlive) {
+        if ($command === 'start') {
+            die("\033[33mZba already running\033[0m\n");
+        }
+    } else if ($command !== 'start' && $command !== 'reload') {
+        die("\033[33mZba not run\033[0m\n");
+    }
+
+	switch($command)
+	{
+		case 'start':
+			/**
+			 * example:
+			 *
+			 $task = new Task();
+			 $task->name = 'MyTask';
+			 $task->count = 2;
+			 $task->closure = function($worker) {
+				file_put_contents(__DIR__."/w-{$worker->pid}.log", date('Y-m-d H:i:s').PHP_EOL, 8);
+				usleep(1000000);	
+			 };
+			 * $tasks = [	
+			 * 		$task,
+			 * 		new DefaultTask()
+			 * ]
+			 * $pool = new ProcessPool($tasks);
+			 * $pool->start();
+			 */
+			try{
+				// $task = new Task();
+				// $task->name = 'MyTask';
+				// $task->count = 2;
+				// $task->closure = function($worker) {
+				// 	file_put_contents(__DIR__."/w-{$worker->pid}.log", date('Y-m-d H:i:s').PHP_EOL, 8);
+				// 	usleep(1000000);	
+				// };
+
+				// $pool = new ProcessPool([$task, new DefaultTask()]);
+				// $tasks = [new \Task\DefaultTask()];
+				$tasks = [];
+				foreach(glob(__DIR__.'/task/*Task.php') as $taskFile)
+				{
+					$classname = "\\Task\\".basename($taskFile, '.php');
+					$tasks[] = new $classname();
+				}
+				$pool = new ProcessPool($tasks);
+				$pool->start();
+			} catch(Exception $ex) {
+				die("\033[31mmsg:{$ex->getMessage()}, file:{$ex->getFile()}, line:{$ex->getLine()}\033[0m\n");
+			}
+			break;
+		case 'stop':
+			$masterPid && posix_kill($masterPid, SIGTERM);
+
+			$timeout = 5; $start_time = time();
+			// Check master process is still alive?
+            while (1) {
+                $masterIsAlive = $masterPid && posix_kill($masterPid, 0);
+                if ($masterIsAlive) {
+                    // Timeout?
+                    if (time() - $start_time >= $timeout) exit;
+                    // Waiting amoment.
+                    usleep(10000); continue;
+                }
+                // Stop success.
+                die("\033[32mZba stop success\033[0m\n");
+            }
+			break;
+		case 'reload':
+			$masterPid && posix_kill($masterPid, SIGUSR1);
+            die("\033[32mZba reload success\033[0m\n");
+			break;	
+		default:
+			help();
+			break;
+	}
+}

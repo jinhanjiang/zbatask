@@ -1,6 +1,8 @@
 # zbatask
 Multi-process task framework for PHP.
 
+Php version requires 5.4+, support php7
+
 You first need to create the task you want to perform, and you can quickly create an instance through the command.
 
 ```
@@ -38,7 +40,7 @@ class DefaultTask extends Task
 ```
 You can write your logic in the run method.
 
-You can set some parameters to create a file .env the current directory. 
+You can set some parameters to create a file .env the current directory. (This is not necessary)
 ```
 ; current file name is: .env
 ; This is a sample configuration file
@@ -60,6 +62,11 @@ max_execute_times：After executing N tasks, the process regenerates a new proce
 Start task:
 ```
 ./zba start
+```
+
+Restart task:
+```
+./zba restart
 ```
 
 Stop task:

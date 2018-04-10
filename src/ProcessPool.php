@@ -116,8 +116,8 @@ class ProcessPool extends Process
 		if(! extension_loaded('pcntl')) die("\033[31mPlease install pcntl extension.\033[0m\n");
 		if(! extension_loaded('posix')) die("\033[31mPlease install posix extension.\033[0m\n");
 
-		/**
-		 * .env 
+		/*
+		  file .env contents 
 
 		 	; This is a sample configuration file
 			; Comments start with ';', as in php.ini
@@ -194,14 +194,14 @@ class ProcessPool extends Process
 	{
 		/**
 		 *
-		 $pid = pcntl_fork();// pcntl_fork 的返回值是一个int值
-				             // 如果$pid=-1 fork进程失败
-				             // 如果$pid=0 当前的上下文环境为worker
-				             // 如果$pid>0 当前的上下文环境为master，这个pid就是fork的worker的pid
-
-				             // in master context
-							 pcntl_wait($status); // pcntl_wait会阻塞，例如直到一个子进程exit
-							 // 或者 pcntl_waitpid($pid, $status, WNOHANG); // WNOHANG:即使没有子进程exit，也会立即返回
+		 * $pid = pcntl_fork();// pcntl_fork 的返回值是一个int值
+		 *		             // 如果$pid=-1 fork进程失败
+		 *		             // 如果$pid=0 当前的上下文环境为worker
+		 *		             // 如果$pid>0 当前的上下文环境为master，这个pid就是fork的worker的pid
+		 * 
+		 *	             	 // in master context
+		 *					 pcntl_wait($status); // pcntl_wait会阻塞，例如直到一个子进程exit
+		 *					 // 或者 pcntl_waitpid($pid, $status, WNOHANG); // WNOHANG:即使没有子进程exit，也会立即返回
 		 */
 
 		$pid = pcntl_fork();

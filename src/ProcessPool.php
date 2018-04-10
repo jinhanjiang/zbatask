@@ -55,12 +55,12 @@ class ProcessPool extends Process
 	private $env = [];
 
 	/**
-	 * support linux signal
+	 * support linux signal (The signal received by the main process.)
 	 * @var array
 	 */
 	private $signalSupport = [
 		'reload' => SIGUSR1,
-		'stop' => SIGUSR2,
+		'status' => SIGUSR2,
 		'terminate' => SIGTERM,
 		'int' => SIGINT
 	];
@@ -267,7 +267,7 @@ class ProcessPool extends Process
 				// push reload signal to the worker processes from the master process
 				foreach($this->workers as $taskId => $workers) {
 					foreach($workers as $pid => $worker) {	
-						$worker->pipeWrite('reload');
+						$worker->pipeWrite('stop');
 						$allWorkers[$pid] = $worker;
 					}
 				}
@@ -275,21 +275,6 @@ class ProcessPool extends Process
 					'signal'=>'reload',
 					'pool'=>$allWorkers
 				];
-				break;
-			// stop signal
-			case $this->signalSupport['stop']:
-				$allWorkers = [];
-				// push stop signal to the worker processes from the master process
-				foreach($this->workers as $taskId => $workers) {
-					foreach($workers as $pid=>$worker) {	
-						$worker->pipeWrite('stop');
-						$allWorkers[$pid] = $worker;
-					}
-				}
-				$this->waitSignalProcessPool = [
-					'signal'=>'stop',
-					'pool'=>$allWorkers
-				];	
 				break;
 			case $this->signalSupport['int']:
 			case $this->signalSupport['terminate']://master process exit
@@ -344,13 +329,6 @@ class ProcessPool extends Process
 								unset($this->waitSignalProcessPool['pool'][$res]);
 								// fork a new worker
 								$this->fork($this->tasks[$taskId]);
-							}
-						}
-						
-						if($this->waitSignalProcessPool['signal'] === 'stop')
-						{
-							if(array_key_exists($res, $this->waitSignalProcessPool['pool'])) {
-								unset($this->waitSignalProcessPool['pool'][$res]);
 							}
 						}
 

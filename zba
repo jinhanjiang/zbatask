@@ -103,43 +103,36 @@ PHP_CODE;
         die("\033[33mZba not run\033[0m\n");
     }
 
+	/**
+	 * example:
+	 *
+	 * $task = new Task();
+	 * $task->name = 'MyTask';
+	 * $task->count = 2;
+	 * $task->closure = function($worker) {
+	 *	file_put_contents(__DIR__."/w-{$worker->pid}.log", date('Y-m-d H:i:s').PHP_EOL, 8);
+	 *	usleep(1000000);	
+	 * };
+	 * $tasks = [	
+	 * 		$task,
+	 * 		new DefaultTask()
+	 * ]
+	 * $pool = new ProcessPool($tasks);
+	 * $pool->start();
+	 */
+	$tasks = [];
+	if(in_array($command, array('start', 'restart')))
+	{
+		foreach(glob(__DIR__.'/task/*Task.php') as $taskFile)
+		{
+			$classname = "\\Task\\".basename($taskFile, '.php');
+			$tasks[] = new $classname();
+		}
+	}
 	switch($command)
 	{
 		case 'start':
-			/**
-			 * example:
-			 *
-			 * $task = new Task();
-			 * $task->name = 'MyTask';
-			 * $task->count = 2;
-			 * $task->closure = function($worker) {
-			 *	file_put_contents(__DIR__."/w-{$worker->pid}.log", date('Y-m-d H:i:s').PHP_EOL, 8);
-			 *	usleep(1000000);	
-			 * };
-			 * $tasks = [	
-			 * 		$task,
-			 * 		new DefaultTask()
-			 * ]
-			 * $pool = new ProcessPool($tasks);
-			 * $pool->start();
-			 */
 			try{
-				// $task = new Task();
-				// $task->name = 'MyTask';
-				// $task->count = 2;
-				// $task->closure = function($worker) {
-				// 	file_put_contents(__DIR__."/w-{$worker->pid}.log", date('Y-m-d H:i:s').PHP_EOL, 8);
-				// 	usleep(1000000);	
-				// };
-
-				// $pool = new ProcessPool([$task, new DefaultTask()]);
-				// $tasks = [new \Task\DefaultTask()];
-				$tasks = [];
-				foreach(glob(__DIR__.'/task/*Task.php') as $taskFile)
-				{
-					$classname = "\\Task\\".basename($taskFile, '.php');
-					$tasks[] = new $classname();
-				}
 				$pool = new ProcessPool($tasks);
 				$pool->start();
 			} catch(Exception $ex) {
@@ -147,6 +140,7 @@ PHP_CODE;
 			}
 			break;
 		case 'stop':
+		case 'restart':
 			$masterPid && posix_kill($masterPid, SIGTERM);
 
 			$timeout = 5; $start_time = time();
@@ -155,12 +149,26 @@ PHP_CODE;
                 $masterIsAlive = $masterPid && posix_kill($masterPid, 0);
                 if ($masterIsAlive) {
                     // Timeout?
-                    if (time() - $start_time >= $timeout) exit;
+                    if ('stop' == $command && time() - $start_time >= $timeout) exit;
                     // Waiting amoment.
                     usleep(10000); continue;
                 }
-                // Stop success.
-                die("\033[32mZba stop success\033[0m\n");
+                if('stop' == $command) {
+	                // Stop success.
+	                die("\033[32mZba stop success\033[0m\n");
+                }
+                else {
+                	break;
+                }
+            }
+            if('restart'==$command)
+            {
+				try{
+					$pool = new ProcessPool($tasks);
+					$pool->start();
+				} catch(Exception $ex) {
+					die("\033[31mmsg:{$ex->getMessage()}, file:{$ex->getFile()}, line:{$ex->getLine()}\033[0m\n");
+				}
             }
 			break;
 		case 'reload':

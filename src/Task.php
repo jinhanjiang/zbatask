@@ -19,7 +19,13 @@ class Task
 	 * task process name
 	 * @var string
 	 */
-	public $name = __CLASS__;
+	public $name = 'none';
+
+	/**
+	 * The current file address, the subclass file and the parent class file address are different.
+	 * @var string
+	 */
+	public $currentFile = '';
 
 	/**
 	 * callback function
@@ -28,6 +34,11 @@ class Task
 	public $closure = null;
 
 	public function __construct() {
-		$this->taskId = spl_object_hash($this);
+        $backtrace = debug_backtrace();
+        $this->currentFile = $backtrace[0]['file'];
+        if('none' === $this->name) {
+        	$this->name = basename($this->currentFile, '.php');
+        }
+		$this->taskId = md5($this->currentFile);
 	}
 }

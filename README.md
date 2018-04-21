@@ -79,3 +79,10 @@ Reload task:（Recreate the process）
 ```
 ./zba reload
 ```
+
+If you perform a queue task, you can check the queue length, reach a certain peak, and dynamically adjust the number of processes based on the start of a task.
+
+You can set the number of tasks dynamically, as follows.
+```
+./zba reload DefaultTask 3
+```

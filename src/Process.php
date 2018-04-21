@@ -82,7 +82,7 @@ abstract class Process
 	 * default 5 * 60 * 60 * 24 = 432000
 	 * @var int
 	 */
-	protected static $maxExecuteTimes = 5 * 60 * 60 * 24;
+	protected static $maxExecuteTimes = 432000;
 
 	/**
 	 * current execute times
@@ -203,6 +203,7 @@ abstract class Process
 	 * @return void
 	 */
 	protected function setProcessName($name = '') {
+		if(PHP_OS == 'Darwin') return false;
 		// >=php 5.5
 		$this->name = $name?:$this->name;
         if (function_exists('cli_set_process_title')) {

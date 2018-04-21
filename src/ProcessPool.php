@@ -44,8 +44,21 @@ class ProcessPool extends Process
 
 	/**
 	 * master pid save path
+	 * @var string
 	 */
 	private $pidFile = '';
+
+	/**
+	 * statistics process info file
+	 * @var string 
+	 */
+	private $statisticsFile = '';
+
+	/**
+	 * Communication files with the main process
+	 * @var string 
+	 */
+	private $communicationFile = '';
 
 	/**
 	 * env config
@@ -65,6 +78,30 @@ class ProcessPool extends Process
 	];
 
 	/**
+	 * master process status: starting
+	 * @var int
+	 */
+	const STARTING = 1;
+
+	/**
+	 * master process status: running
+	 * @var int
+	 */
+	const RUNNING = 2;
+
+	/**
+	 * master process status: shutdown
+	 * @var int
+	 */
+	const SHUTDOWN = 4;
+
+	/**
+	 * master process status 1 starting, 2 running 4 shutdown
+	 * @var int
+	 */
+	private $status = self::STARTING;
+
+	/**
 	 * construct function
 	 */
 	public function __construct($tasks)
@@ -78,6 +115,8 @@ class ProcessPool extends Process
 		(count($newTasks) == 0) && exit("\033[31mThere is no task to run.\033[0m\n");
 		$this->tasks = $newTasks;
         $this->pidFile = dirname(__DIR__) . "/zba.pid";
+        $this->statisticsFile = dirname(__DIR__) ."/.zba.status";
+        $this->communicationFile = dirname(__DIR__) . "/.zba.chat";
 
 		$this->setProcessName('Master');
 		parent::__construct();
@@ -115,6 +154,7 @@ class ProcessPool extends Process
 		if(! extension_loaded('pcntl')) die("\033[31mPlease install pcntl extension.\033[0m\n");
 		if(! extension_loaded('posix')) die("\033[31mPlease install posix extension.\033[0m\n");
 
+		$this->status = static::STARTING;
 		/*
 		  file .env contents 
 
@@ -247,7 +287,7 @@ class ProcessPool extends Process
 	private function registerSigHandler()
 	{
 		foreach($this->signalSupport as $sig) {
-			pcntl_signal($sig, ['Zba\ProcessPool', 'defineSigHandler']);
+			pcntl_signal($sig, ['Zba\ProcessPool', 'defineSigHandler'], false);
 		}
 	}
 
@@ -262,8 +302,39 @@ class ProcessPool extends Process
 		{
 			// reload signal
 			case $this->signalSupport['reload']:
+				$processCounts = array();
+				if(is_file($this->communicationFile))
+				{
+					// Parse the command to the main process.
+					$communicationContent = @file_get_contents($this->communicationFile);
+					
+					@unlink($this->communicationFile);
+					$command = static::isJsonStr($communicationContent) 
+						? json_decode($communicationContent, true) : [];
+					if(isset($command['command']) 
+						&& is_scalar($command['command']))
+					{
+						switch ($command['command']) {
+							// {"command":"setProcessCount","processInfos":[{"name":"DefaultTask","count":3}, ...]}
+							case 'setProcessCount':
+								if(is_array($command['processInfos'])) 
+									foreach ($command['processInfos'] as $processInfo) 
+								{
+									if(isset($processInfo['name']) 
+										&& $processInfo['count'] > 0) 
+										$processCounts[$processInfo['name']] = intval($processInfo['count']);
+								}
+								break;
+						}
+					}
+				}
+
 				// push reload signal to the worker processes from the master process
 				foreach($this->workers as $taskId => $workers) {
+					$task = $this->tasks[$taskId];
+					if(isset($processCounts[$this->tasks[$taskId]->name])) {
+						$this->tasks[$taskId]->count = $processCounts[$this->tasks[$taskId]->name];
+					}
 					foreach($workers as $pid => $worker) {	
 						$worker->pipeWrite('stop');
 					}
@@ -274,6 +345,7 @@ class ProcessPool extends Process
 				break;
 			case $this->signalSupport['int']:
 			case $this->signalSupport['terminate']://master process exit
+				$this->status = static::SHUTDOWN;
 				foreach($this->workers as $taskId => $workers)
 				{
 					foreach($workers as $pid => $worker)
@@ -302,6 +374,10 @@ class ProcessPool extends Process
 	 */
 	public function hangup(Closure $closure = null)
 	{
+		$this->status = static::RUNNING;
+
+        // Register shutdown function for checking errors.
+        register_shutdown_function(array($this, 'checkErrors'));
 		while(true)
 		{
             // Calls signal handlers for pending signals again.
@@ -318,25 +394,92 @@ class ProcessPool extends Process
 					{
 						$worker->clearPipe();
 						unset($this->workers[$taskId][$res]);
-
-						if($this->waitSignalProcessPool['signal'] === 'reload') {
-							$this->fork($this->tasks[$taskId]);
-						}
-
 					}
 				}
 
-				if(empty($this->waitSignalProcessPool['signal'])) {
-					$task = $this->tasks[$taskId];
-					while(count($this->workers[$task->taskId]) < $task->count) {
-						$this->fork($this->tasks[$taskId]);
-					}
+				$task = $this->tasks[$taskId];
+				while(count($this->workers[$task->taskId]) < $task->count) {
+					$this->fork($this->tasks[$taskId]);
 				}
 			}
 			
 			// Prevent CPU utilization from reaching 100%.
 			usleep(self::$hangupLoopMicrotime);
 		}
+	}
+
+    /**
+     * Check errors when current process exited.
+     *
+     * @return void
+     */
+    public function checkErrors()
+    {
+        if (static::SHUTDOWN != $this->status) {
+            $errors    = error_get_last();
+            if ($errors && ($errors['type'] === E_ERROR ||
+                    $errors['type'] === E_PARSE ||
+                    $errors['type'] === E_CORE_ERROR ||
+                    $errors['type'] === E_COMPILE_ERROR ||
+                    $errors['type'] === E_RECOVERABLE_ERROR)
+            ) {
+                ProcessException::error('Process ['. posix_getpid() .'] process terminated with ERROR: ' . static::getErrorType($errors['type']) . " \"{$errors['message']} in {$errors['file']} on line {$errors['line']}\"");
+            }
+        }
+    }
+    /**
+     * Get error message by error code.
+     *
+     * @param integer $type
+     * @return string
+     */
+    protected static function getErrorType($type)
+    {
+        switch ($type) {
+            case E_ERROR: // 1 //
+                return 'E_ERROR';
+            case E_WARNING: // 2 //
+                return 'E_WARNING';
+            case E_PARSE: // 4 //
+                return 'E_PARSE';
+            case E_NOTICE: // 8 //
+                return 'E_NOTICE';
+            case E_CORE_ERROR: // 16 //
+                return 'E_CORE_ERROR';
+            case E_CORE_WARNING: // 32 //
+                return 'E_CORE_WARNING';
+            case E_COMPILE_ERROR: // 64 //
+                return 'E_COMPILE_ERROR';
+            case E_COMPILE_WARNING: // 128 //
+                return 'E_COMPILE_WARNING';
+            case E_USER_ERROR: // 256 //
+                return 'E_USER_ERROR';
+            case E_USER_WARNING: // 512 //
+                return 'E_USER_WARNING';
+            case E_USER_NOTICE: // 1024 //
+                return 'E_USER_NOTICE';
+            case E_STRICT: // 2048 //
+                return 'E_STRICT';
+            case E_RECOVERABLE_ERROR: // 4096 //
+                return 'E_RECOVERABLE_ERROR';
+            case E_DEPRECATED: // 8192 //
+                return 'E_DEPRECATED';
+            case E_USER_DEPRECATED: // 16384 //
+                return 'E_USER_DEPRECATED';
+        }
+        return "";
+    }
+
+    /**
+     * check string is json
+     *
+     * @param $text string
+     */
+	public static function isJsonStr($text) {
+		if(is_string($text)) {
+			@json_decode($text); return (json_last_error() === JSON_ERROR_NONE);
+		}
+		return false;
 	}
 
 	/**

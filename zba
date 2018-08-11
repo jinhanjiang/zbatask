@@ -62,7 +62,7 @@ class DefaultTask extends Task
 {
 	public function __construct() {
 		\$this->count = 2;
-		\$this->lastSleepTime = 0;
+		\$this->nextSleepTime = 0;
 		\$this->name = 'DefaultTask';
 		\$this->closure = \$this->run();
 		parent::__construct();
@@ -73,10 +73,10 @@ class DefaultTask extends Task
 		return function(Process \$worker) 
 		{
 			\$nowTime = time(); \$delayTime = strtotime('+5 sec');
-			if(\$this->lastSleepTime == 0) \$this->lastSleepTime = \$delayTime;
-			if(\$this->lastSleepTime < \$nowTime)
+			if(\$this->nextSleepTime == 0) \$this->nextSleepTime = \$delayTime;
+			if(\$this->nextSleepTime < \$nowTime)
 			{
-				\$this->lastSleepTime = \$delayTime;
+				\$this->nextSleepTime = \$delayTime;
 				file_put_contents(__DIR__."/w-{\$worker->pid}.log", date('Y-m-d H:i:s').PHP_EOL, 8);
 			}
 		};
@@ -156,7 +156,9 @@ PHP_CODE;
                 $masterIsAlive = $masterPid && posix_kill($masterPid, 0);
                 if ($masterIsAlive) {
                     // Timeout?
-                    if ('stop' == $command && time() - $start_time >= $timeout) exit;
+                    if ('stop' == $command && time() - $start_time >= $timeout) {
+                    	die("\033[31mZba stop exception\033[0m\n");
+                    }
                     // Waiting amoment.
                     usleep(10000); continue;
                 }
@@ -179,9 +181,17 @@ PHP_CODE;
             }
 			break;
 		case 'reload':
-			if(is_file($communicationFile = __DIR__.'/.zba.chat')) die("\033[33mPlease try again later\033[0m\n");
-			else if($argv[2] && $argv[3] > 0) {
-				file_put_contents($communicationFile, '{"command":"setProcessCount","processInfos":[{"name":"'.$argv[2].'","count":'.intval($argv[3]).'}]}');
+			if(is_file(ProcessPool::$communicationFile)) die("\033[33mPlease try again later\033[0m\n");
+			else if($argv[2] && $argv[3] > 0) 
+			{
+				file_put_contents(ProcessPool::$communicationFile, json_encode(
+					[
+						'command'=>'setProcessCount',
+						'processInfos'=>[
+							['name'=>$argv[2], 'count'=>intval($argv[3])]
+						]						
+					])
+				);
 			}
 			$masterPid && posix_kill($masterPid, SIGUSR1);
             die("\033[32mZba reload success\033[0m\n");

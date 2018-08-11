@@ -35,6 +35,9 @@ class DefaultTask extends Task
 		// The callback task
 		$this->closure = $this->run();
 
+		// Time to sleep next time
+		$this->nextSleepTime = 0;
+
 		parent::__construct();
 	}
 
@@ -43,17 +46,12 @@ class DefaultTask extends Task
 		return function(Process $worker) 
 		{
 			// Execute every 5 minutes, Note: no sleep in the code
-			$nowTime = time();
-			if($this->lastSleepTime > 0) 
+			$nowTime = time(); $delayTime = strtotime('+5 sec');
+			if($this->nextSleepTime == 0) $this->nextSleepTime = $delayTime;
+			if($this->nextSleepTime < $nowTime)
 			{
-				if($this->lastSleepTime < $nowTime)
-				{
-					$this->lastSleepTime = strtotime('+5 minute');
-					file_put_contents(__DIR__."/w-{$worker->pid}.log", date('Y-m-d H:i:s').PHP_EOL, 8);
-				}
-			}
-			else {
-				$this->lastSleepTime = $nowTime;
+				$this->nextSleepTime = $delayTime;
+				file_put_contents(__DIR__."/w-{$worker->pid}.log", date('Y-m-d H:i:s').PHP_EOL, 8);
 			}
 		};
 	}
@@ -105,4 +103,75 @@ If you perform a queue task, you can check the queue length, reach a certain pea
 You can set the number of tasks dynamically, as follows.
 ```
 ./zba reload DefaultTask 3
+```
+
+
+Dynamically adjust the number of processes by task， For example: create a file task/AdjustProcessCountTask.php
+```
+<?php
+namespace Task;
+
+use Zba\ProcessPool;
+use Zba\Process;
+use Zba\Task;
+
+class AdjustProcessCountTask extends Task
+{
+	public function __construct() {
+		// Set to start only one process
+		$this->count = 1;
+
+		// This task is not valid when performing reload
+		$this->reload = false;
+
+		// The name of the task
+		$this->name = 'AdjustProcessCountTask'; 
+
+		// The callback task
+		$this->closure = $this->run();
+
+		// Time to sleep next time
+		$this->nextSleepTime = 0;
+
+		parent::__construct();
+	}
+
+	public function run()
+	{
+		return function(Process $worker) 
+		{
+			// Execute every 5 minutes, Note: no sleep in the code
+			$nowTime = time(); $delayTime = strtotime('+5 minute');
+			if($this->nextSleepTime == 0) $this->nextSleepTime = $delayTime;
+			if($this->nextSleepTime < $nowTime)
+			{
+				$this->nextSleepTime = $delayTime;
+
+				// In other ways, such as checking the length of the task queue, you get the number of processes to start， we set the process to 5
+
+				$nowCount = 5;
+
+				$processInfos = [];
+				if(! $this->hasSetProceess) {
+					$processInfos[] = ['name'=>'DefaultTask', 'count'=>$nowCount]; $this->hasSetProceess = true;
+				}
+                if(count($processInfos) > 0) 
+                {
+                    // Gets the main process pid
+                    $masterPid = is_file(ProcessPool::$pidFile) ? file_get_contents(ProcessPool::$pidFile) : 0 ;
+
+                    file_put_contents(ProcessPool::$communicationFile, 
+                        json_encode(
+                            [
+                                'command'=>'setProcessCount', 
+                                'processInfos'=>$processInfos
+                            ]
+                        )
+                    );
+                    $masterPid && posix_kill($masterPid, SIGUSR1);
+                }
+			}
+		};
+	}
+}
 ```

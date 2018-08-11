@@ -62,6 +62,7 @@ class DefaultTask extends Task
 {
 	public function __construct() {
 		\$this->count = 2;
+		\$this->lastSleepTime = 0;
 		\$this->name = 'DefaultTask';
 		\$this->closure = \$this->run();
 		parent::__construct();
@@ -71,17 +72,12 @@ class DefaultTask extends Task
 	{
 		return function(Process \$worker) 
 		{
-			\$nowTime = time();
-			if(\$this->lastSleepTime > 0) 
+			\$nowTime = time(); \$delayTime = strtotime('+5 sec');
+			if(\$this->lastSleepTime == 0) \$this->lastSleepTime = \$delayTime;
+			if(\$this->lastSleepTime < \$nowTime)
 			{
-				if(\$this->lastSleepTime < \$nowTime)
-				{
-					\$this->lastSleepTime = strtotime('+5 sec');
-					file_put_contents(__DIR__."/w-{\$worker->pid}.log", date('Y-m-d H:i:s').PHP_EOL, 8);
-				}
-			}
-			else {
-				\$this->lastSleepTime = \$nowTime;
+				\$this->lastSleepTime = \$delayTime;
+				file_put_contents(__DIR__."/w-{\$worker->pid}.log", date('Y-m-d H:i:s').PHP_EOL, 8);
 			}
 		};
 	}

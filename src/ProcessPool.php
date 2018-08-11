@@ -328,17 +328,26 @@ class ProcessPool extends Process
 						}
 					}
 				}
-
-				// push reload signal to the worker processes from the master process
-				foreach($this->workers as $taskId => $workers) {
-					if(isset($processCounts[$this->tasks[$taskId]->name])) {
-						$this->tasks[$taskId]->count = $processCounts[$this->tasks[$taskId]->name];   
-					}
+                $isAllReload = count($processCounts) > 0 ? false : true;
+                // push reload signal to the worker processes from the master process
+                foreach($this->workers as $taskId => $workers) 
+                {
                     $isReload = isset($this->tasks[$taskId]->reload) ? $this->tasks[$taskId]->reload : true;
-                    if($isReload) foreach($workers as $pid => $worker) {  
+                    if(! $isReload) continue;
+
+                    $allowReload = false;
+                    if($isAllReload) $allowReload = true;
+                    else
+                    {
+                        if(isset($processCounts[$this->tasks[$taskId]->name])) {
+                            $this->tasks[$taskId]->count = $processCounts[$this->tasks[$taskId]->name]; 
+                            $allowReload = true;
+                        }
+                    }
+                    if($allowReload) foreach($workers as $pid => $worker) {  
                         $worker->pipeWrite('stop');
                     }
-				}
+                }
 				$this->waitSignalProcessPool = [
 					'signal'=>'reload',
 				];

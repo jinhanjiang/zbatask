@@ -334,9 +334,9 @@ class ProcessPool extends Process
 					$task = $this->tasks[$taskId];
 					if(isset($processCounts[$this->tasks[$taskId]->name])) {
 						$this->tasks[$taskId]->count = $processCounts[$this->tasks[$taskId]->name];
-					}
-					foreach($workers as $pid => $worker) {	
-						$worker->pipeWrite('stop');
+                        foreach($workers as $pid => $worker) {  
+                            $worker->pipeWrite('stop');
+                        }
 					}
 				}
 				$this->waitSignalProcessPool = [

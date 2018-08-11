@@ -3,6 +3,8 @@
 use Zba\ProcessPool;
 use Zba\Task;
 
+if(is_file($config = __DIR__.'/config.php')) require($config);
+
 function help() 
 {
 	$version = ProcessPool::$version;

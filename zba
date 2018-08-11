@@ -71,8 +71,18 @@ class DefaultTask extends Task
 	{
 		return function(Process \$worker) 
 		{
-			file_put_contents(__DIR__."/w-{\$worker->pid}.log", date('Y-m-d H:i:s').PHP_EOL, 8);
-			usleep(1000000);
+			\$nowTime = time();
+			if(\$this->lastSleepTime > 0) 
+			{
+				if(\$this->lastSleepTime < \$nowTime)
+				{
+					\$this->lastSleepTime = strtotime('+5 sec');
+					file_put_contents(__DIR__."/w-{\$worker->pid}.log", date('Y-m-d H:i:s').PHP_EOL, 8);
+				}
+			}
+			else {
+				\$this->lastSleepTime = \$nowTime;
+			}
 		};
 	}
 }

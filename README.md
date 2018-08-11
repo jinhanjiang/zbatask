@@ -23,9 +23,18 @@ use Zba\Task;
 class DefaultTask extends Task
 {
 	public function __construct() {
+		// Number of processes started
 		$this->count = 2;
-		$this->name = 'DefaultTask';
+
+		// If set to false, execute the reload command, which is invalid for the task process
+		$this->reload = true;
+
+		// The name of the task
+		$this->name = 'DefaultTask'; 
+
+		// The callback task
 		$this->closure = $this->run();
+
 		parent::__construct();
 	}
 
@@ -33,8 +42,19 @@ class DefaultTask extends Task
 	{
 		return function(Process $worker) 
 		{
-			file_put_contents(__DIR__."/w-{$worker->pid}.log", date('Y-m-d H:i:s').PHP_EOL, 8);
-			usleep(1000000);
+			// Execute every 5 minutes, Note: no sleep in the code
+			$nowTime = time();
+			if($this->lastSleepTime > 0) 
+			{
+				if($this->lastSleepTime < $nowTime)
+				{
+					$this->lastSleepTime = strtotime('+5 minute');
+					file_put_contents(__DIR__."/w-{$worker->pid}.log", date('Y-m-d H:i:s').PHP_EOL, 8);
+				}
+			}
+			else {
+				$this->lastSleepTime = $nowTime;
+			}
 		};
 	}
 }

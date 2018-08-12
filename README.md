@@ -158,9 +158,9 @@ class AdjustProcessCountTask extends Task
                 if(count($processInfos) > 0) 
                 {
                     // Gets the main process pid
-                    $masterPid = is_file(ProcessPool::$pidFile) ? file_get_contents(ProcessPool::$pidFile) : 0 ;
+                    $masterPid = is_file(ProcessPool::getConfigFile('pid')) ? file_get_contents(ProcessPool::getConfigFile('pid')) : 0 ;
 
-                    file_put_contents(ProcessPool::$communicationFile, 
+                    file_put_contents(ProcessPool::getConfigFile('communication'), 
                         json_encode(
                             [
                                 'command'=>'setProcessCount', 

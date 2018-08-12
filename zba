@@ -98,8 +98,8 @@ PHP_CODE;
 	}
 
 	// php -f zba start,  cause $argv like: ['zba', 'start']
-	$command = $argv[1]; $pidFile = __DIR__.'/zba.pid';
-	$masterPid = is_file($pidFile) ? file_get_contents($pidFile) : 0;
+	$command = $argv[1];
+	$masterPid = is_file(ProcessPool::getConfigFile('pid')) ? file_get_contents(ProcessPool::getConfigFile('pid')) : 0;
     $masterIsAlive = $masterPid && @posix_kill($masterPid, 0) && posix_getpid() != $masterPid;
     // Master is still alive?
     if ($masterIsAlive) {
@@ -181,10 +181,10 @@ PHP_CODE;
             }
 			break;
 		case 'reload':
-			if(is_file(ProcessPool::$communicationFile)) die("\033[33mPlease try again later\033[0m\n");
+			if(is_file(ProcessPool::getConfigFile('communication'))) die("\033[33mPlease try again later\033[0m\n");
 			else if($argv[2] && $argv[3] > 0) 
 			{
-				file_put_contents(ProcessPool::$communicationFile, json_encode(
+				file_put_contents(ProcessPool::getConfigFile('communication'), json_encode(
 					[
 						'command'=>'setProcessCount',
 						'processInfos'=>[

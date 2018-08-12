@@ -43,24 +43,6 @@ class ProcessPool extends Process
     ];
 
     /**
-     * master pid save path
-     * @var string
-     */
-    static $pidFile = __DIR__ . "/../zba.pid";
-
-    /**
-     * statistics process info file
-     * @var string 
-     */
-    static $statisticsFile = __DIR__ . "/../.zba.status";
-
-    /**
-     * Communication files with the main process
-     * @var string 
-     */
-    static $communicationFile = __DIR__ . "/../.zba.chat";
-
-    /**
      * env config
      * @var array
      */
@@ -117,6 +99,20 @@ class ProcessPool extends Process
 
         $this->setProcessName('Master');
         parent::__construct();
+    }
+
+    public static function getConfigFile($config='pid') 
+    {
+        $file = '';
+        switch($config) {
+            // Communication files with the main process
+            case 'communication': $file = dirname(__DIR__) . "/.zba.chat"; break;
+            // statistics process info file
+            case 'statistics': $file = dirname(__DIR__) . "/.zba.status"; break;
+            // master pid save path
+            default: $file = dirname(__DIR__) . "/zba.pid"; break;
+        }
+        return $file;
     }
 
     public function start()
@@ -193,7 +189,7 @@ class ProcessPool extends Process
     {
         // init master instance
         $masterPid = posix_getpid();
-        if (false === @file_put_contents(static::$pidFile, $masterPid)) {
+        if (false === @file_put_contents(self::getConfigFile('pid'), $masterPid)) {
             ProcessException::error('can not save pid to '.$masterPid);
         }
         $this->pipeCreate();
@@ -300,13 +296,13 @@ class ProcessPool extends Process
             // reload signal
             case $this->signalSupport['reload']:
                 $processCounts = array();
-                if(is_file(static::$communicationFile))
+                if(is_file(self::getConfigFile('communication')))
                 {
                     // Parse the command to the main process.
-                    $communicationContent = @file_get_contents(static::$communicationFile);
+                    $communicationContent = @file_get_contents(self::getConfigFile('communication'));
                     
-                    @unlink(static::$communicationFile);
-                    $command = static::isJsonStr($communicationContent) 
+                    @unlink(self::getConfigFile('communication'));
+                    $command = self::isJsonStr($communicationContent) 
                         ? json_decode($communicationContent, true) : [];
                     if(isset($command['command']) 
                         && is_scalar($command['command']))
@@ -366,7 +362,7 @@ class ProcessPool extends Process
                 $this->clearPipe();
 
                 // clear master pid file
-                if(is_file(static::$pidFile)) @unlink(static::$pidFile);
+                if(is_file(self::getConfigFile('pid'))) @unlink(self::getConfigFile('pid'));
                 // kill -9 master process
                 exit;
                 break;

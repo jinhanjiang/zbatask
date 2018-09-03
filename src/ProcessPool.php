@@ -253,7 +253,7 @@ class ProcessPool extends Process
                     $worker->pipeCreate();
                     $worker->hangup($task->closure);
                 } catch(Exception $ex) {
-                    ProcessException::error("msg:{$ex->getMessage()}, file:{$ex->getFile()}, line:{$ex->getLine()}");
+                    ProcessException::error("task:{$task->name}, msg:{$ex->getMessage()}, file:{$ex->getFile()}, line:{$ex->getLine()}");
                 }
                 exit;// worker exit, Avoid the problem that the worker continues to execute the following code.
                 break;
@@ -267,7 +267,7 @@ class ProcessPool extends Process
                     ]);
                     $this->workers[$task->taskId][$pid] = $worker;
                 } catch(Exception $ex) {
-                    ProcessException::error("msg:{$ex->getMessage()}, file:{$ex->getFile()}, line:{$ex->getLine()}");
+                    ProcessException::error("task:{$task->name}, msg:{$ex->getMessage()}, file:{$ex->getFile()}, line:{$ex->getLine()}");
                 }
                 break;
         }

@@ -224,16 +224,20 @@ class ProcessPool extends Process
      */
     private function fork($task) 
     {
-        /**
+        /*
+         * $pid = pcntl_fork();
+         * pcntl_fork returns an in value
          *
-         * $pid = pcntl_fork();// pcntl_fork 的返回值是一个int值
-         *                   // 如果$pid=-1 fork进程失败
-         *                   // 如果$pid=0 当前的上下文环境为worker
-         *                   // 如果$pid>0 当前的上下文环境为master，这个pid就是fork的worker的pid
+         * If $pid = -1 the fork process fails
+         * If $pid = 0 the current context is worker
+         * If $pid > 0 the current context is master, this pid is the pid of the fork worker
          * 
-         *                   // in master context
-         *                   pcntl_wait($status); // pcntl_wait会阻塞，例如直到一个子进程exit
-         *                   // 或者 pcntl_waitpid($pid, $status, WNOHANG); // WNOHANG:即使没有子进程exit，也会立即返回
+         * in master context
+         * pcntl_wait($status); 
+         * pcntl_wait blocks until a child process exits
+         *
+         * pcntl_waitpid($pid, $status, WNOHANG); 
+         * WNOHANG: Return immediately even if there is no child process exit
          */
 
         $pid = pcntl_fork();

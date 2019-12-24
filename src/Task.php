@@ -28,6 +28,18 @@ class Task
 	public $currentFile = '';
 
 	/**
+	 * The method that is exectued before the process start executing the task.
+	 * currently only executed once in the current process
+	 */
+	public $onWorkerStart = null;
+
+	/** 
+	 * The method that is exectued after the process end executing the task.
+	 * currently only executed once in the current process
+	 */ 
+	public $onWorkerStop = null;
+
+	/**
 	 * callback function
 	 * @var callback
 	 */
@@ -40,5 +52,15 @@ class Task
         	$this->name = basename($this->currentFile, '.php');
         }
 		$this->taskId = md5($this->currentFile);
+		$this->onWorkerStart = $this->onWorkerStart();
+		$this->onWorkerStop = $this->onWorkerStop();
+	}
+
+	public function onWorkerStart() {
+		return function(Process $worker) {};
+	}
+	
+	public function onWorkerStop() {
+		return function(Process $worker) {};
 	}
 }

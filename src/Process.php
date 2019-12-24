@@ -17,6 +17,14 @@ abstract class Process
 	public $name = 'none';
 
 	/**
+	 * @version 0.1.1
+	 * tag id
+	 *
+	 * @var int
+	 */
+	public $id = 1;
+
+	/**
 	 * process id
 	 * @var int
 	 */
@@ -129,6 +137,7 @@ abstract class Process
 	 * @return void
 	 */
 	public function pipeWrite($signal = '') {
+		if(! file_exists($this->pipeFile)) return false;
 		$pipe = fopen($this->pipeFile, 'w');
 		if(! $pipe) {
 			ProcessException::error("{$this->name} pipe open {$this->pipeFile}");
@@ -177,6 +186,7 @@ abstract class Process
 	 * @return viod
 	 */
 	public function clearPipe() {
+		if(! $this->signal) $this->signal = 'stop';
 		if(file_exists($this->pipeFile) && ! unlink($this->pipeFile)) {
 			ProcessException::error("{$this->name} pipe clear {$this->pipeFile}");
 			return false;

@@ -5,6 +5,7 @@ namespace Zba;
 use Zba\Process;
 use Zba\Worker;
 use Zba\Task;
+use Zba\Timer;
 use Zba\ProcessException;
 use Exception;
 use Closure;
@@ -18,19 +19,19 @@ class ProcessPool extends Process
      * version
      * @var string
      */
-    public static $version = '0.1.0';
+    public static $version = '0.1.1';
 
     /**
      * worker process objects
      * @var array [Process]
      */
-    public $workers = [];
+    public static $workers = [];
 
     /**
      * tasks 
      * @var array
      */
-    private $tasks = [];
+    private static $tasks = [];
 
     /**
      * the pool for the worker that will be handle by the signal
@@ -38,9 +39,7 @@ class ProcessPool extends Process
      * pool: array [Process]
      * @var array
      */
-    private $waitSignalProcessPool = [
-        'signal'=>''
-    ];
+    private static $waitSignalProcessPool = ['signal'=>''];
 
     /**
      * env config
@@ -52,7 +51,7 @@ class ProcessPool extends Process
      * support linux signal (The signal received by the main process.)
      * @var array
      */
-    private $signalSupport = [
+    private static $signalSupport = [
         'reload' => SIGUSR1,
         'status' => SIGUSR2,
         'terminate' => SIGTERM,
@@ -81,8 +80,12 @@ class ProcessPool extends Process
      * master process status 1 starting, 2 running 4 shutdown
      * @var int
      */
-    private $status = self::STARTING;
+    private static $status = self::STARTING;
 
+    /**
+     * Current master process
+     */
+    private static $master = null;
     /**
      * construct function
      */
@@ -95,9 +98,10 @@ class ProcessPool extends Process
             }
         }
         (count($newTasks) == 0) && exit("\033[31mThere is no task to run.\033[0m\n");
-        $this->tasks = $newTasks;
+        self::$tasks = $newTasks;
 
-        $this->setProcessName('Master');
+        self::$master = $this;
+        self::$master->setProcessName('Master');
         parent::__construct();
     }
 
@@ -147,7 +151,7 @@ class ProcessPool extends Process
         if(! extension_loaded('pcntl')) die("\033[31mPlease install pcntl extension.\033[0m\n");
         if(! extension_loaded('posix')) die("\033[31mPlease install posix extension.\033[0m\n");
 
-        $this->status = static::STARTING;
+        self::$status = self::STARTING;
         /*
           file .env contents 
 
@@ -192,7 +196,8 @@ class ProcessPool extends Process
         if (false === @file_put_contents(self::getConfigFile('pid'), $masterPid)) {
             ProcessException::error('can not save pid to '.$masterPid);
         }
-        $this->pipeCreate();
+        self::$master->pid = $masterPid;
+        self::$master->pipeCreate();
     }
 
     /**
@@ -211,9 +216,9 @@ class ProcessPool extends Process
      */
     private function execFork()
     {
-        foreach($this->tasks as $task) {
-            foreach(range(1, $task->count) as $n) {
-                $this->fork($task);
+        foreach(self::$tasks as $task) {
+            foreach(range(1, $task->count) as $id) {
+                $this->fork($task, $id);
             }           
         }
     }
@@ -222,7 +227,7 @@ class ProcessPool extends Process
      * fork a worker process
      * @return void
      */
-    private function fork($task) 
+    private function fork($task, $id=1) 
     {
         /*
          * $pid = pcntl_fork();
@@ -254,7 +259,11 @@ class ProcessPool extends Process
                             ? $this->env['config']['max_execute_times'] : 0,
                         'name'=>$task->name.'[Worker]'
                     ]);
+                    Timer::del();
+                    $worker->id = $id;
                     $worker->pipeCreate();
+                    $worker->onWorkerStart = $task->onWorkerStart;
+                    $worker->onWorkerStop = $task->onWorkerStop;
                     $worker->hangup($task->closure);
                 } catch(Exception $ex) {
                     ProcessException::error("task:{$task->name}, msg:{$ex->getMessage()}, file:{$ex->getFile()}, line:{$ex->getLine()}");
@@ -269,7 +278,8 @@ class ProcessPool extends Process
                         'name'=>$task->name.'[Master]',
                         'pid'=>$pid, // child process pid
                     ]);
-                    $this->workers[$task->taskId][$pid] = $worker;
+                    $worker->id = $id;
+                    self::$workers[$task->taskId][$pid] = $worker;
                 } catch(Exception $ex) {
                     ProcessException::error("task:{$task->name}, msg:{$ex->getMessage()}, file:{$ex->getFile()}, line:{$ex->getLine()}");
                 }
@@ -283,9 +293,10 @@ class ProcessPool extends Process
      */
     private function registerSigHandler()
     {
-        foreach($this->signalSupport as $sig) {
-            pcntl_signal($sig, ['Zba\ProcessPool', 'defineSigHandler'], false);
+        foreach(self::$signalSupport as $sig) {
+            pcntl_signal($sig, ['\Zba\ProcessPool', 'defineSigHandler'], false);
         }
+        Timer::start();
     }
 
     /**
@@ -293,12 +304,14 @@ class ProcessPool extends Process
      * @param integer $signal
      * @return void
      */
-    public function defineSigHandler($signal = 0)
+    public static function defineSigHandler($signal = 0)
     {
+        // The main process receives the information for processing
+        if(self::$master->pid != posix_getpid()) return false;
         switch($signal)
         {
             // reload signal
-            case $this->signalSupport['reload']:
+            case self::$signalSupport['reload']:
                 $processCounts = array();
                 if(is_file(self::getConfigFile('communication')))
                 {
@@ -306,7 +319,7 @@ class ProcessPool extends Process
                     $communicationContent = @file_get_contents(self::getConfigFile('communication'));
                     
                     @unlink(self::getConfigFile('communication'));
-                    $command = self::isJsonStr($communicationContent) 
+                    $command = self::isJson($communicationContent) 
                         ? json_decode($communicationContent, true) : [];
                     if(isset($command['command']) 
                         && is_scalar($command['command']))
@@ -327,43 +340,39 @@ class ProcessPool extends Process
                 }
                 $isAllReload = count($processCounts) > 0 ? false : true;
                 // push reload signal to the worker processes from the master process
-                foreach($this->workers as $taskId => $workers) 
+                foreach(self::$workers as $taskId => $workers) 
                 {
-                    $isReload = isset($this->tasks[$taskId]->reload) ? $this->tasks[$taskId]->reload : true;
+                    $isReload = isset(self::$tasks[$taskId]->reload) ? self::$tasks[$taskId]->reload : true;
                     if(! $isReload) continue;
 
                     $allowReload = false;
                     if($isAllReload) $allowReload = true;
                     else
                     {
-                        if(isset($processCounts[$this->tasks[$taskId]->name])) { 
-                            $this->tasks[$taskId]->count = $processCounts[$this->tasks[$taskId]->name]; 
+                        if(isset($processCounts[self::$tasks[$taskId]->name])) { 
+                            self::$tasks[$taskId]->count = $processCounts[self::$tasks[$taskId]->name]; 
                             $allowReload = true;
                         }
                     }
                     if($allowReload) foreach($workers as $pid => $worker) {  
-                        $worker->pipeWrite('stop');
+                        $worker->pipeWrite('reload');
                     }
                 }
-                $this->waitSignalProcessPool = [
+                self::$waitSignalProcessPool = [
                     'signal'=>'reload',
                 ];
                 break;
-            case $this->signalSupport['int']:
-            case $this->signalSupport['terminate']://master process exit
-                $this->status = static::SHUTDOWN;
-                foreach($this->workers as $taskId => $workers)
+            case self::$signalSupport['int']:
+            case self::$signalSupport['terminate']://master process exit
+                self::$status = self::SHUTDOWN;
+                foreach(self::$workers as $taskId => $workers)
                 {
-                    foreach($workers as $pid => $worker)
-                    {
-                        // clear pipe
-                        $worker->clearPipe();
-                        // kill -9 worker process
-                        posix_kill($worker->pid, SIGKILL);
+                    foreach($workers as $pid => $worker) {
+                      $worker->pipeWrite('stop');
                     }
                 }
                 // clear pipe
-                $this->clearPipe();
+                self::$master->clearPipe();
 
                 // clear master pid file
                 if(is_file(self::getConfigFile('pid'))) @unlink(self::getConfigFile('pid'));
@@ -380,7 +389,7 @@ class ProcessPool extends Process
      */
     public function hangup(Closure $closure = null)
     {
-        $this->status = static::RUNNING;
+        self::$status = self::RUNNING;  
 
         // Register shutdown function for checking errors.
         register_shutdown_function(array($this, 'checkErrors'));
@@ -391,7 +400,7 @@ class ProcessPool extends Process
 
             // Prophylactic subprocesses become zombie processes.
             // pcntl_wait($status)
-            foreach($this->workers as $taskId => $workers)
+            foreach(self::$workers as $taskId => $workers)
             {
                 foreach($workers as $pid => $worker) 
                 {
@@ -399,13 +408,21 @@ class ProcessPool extends Process
                     if($res > 0)
                     {
                         $worker->clearPipe();
-                        unset($this->workers[$taskId][$res]);
+                        unset(self::$workers[$taskId][$res]);
                     }
                 }
 
-                $task = $this->tasks[$taskId];
-                while(count($this->workers[$task->taskId]) < $task->count) {
-                    $this->fork($this->tasks[$taskId]);
+                $task = self::$tasks[$taskId];
+
+                // Alive process id
+                $aliveWorkerIds = array();
+                foreach(self::$workers[$task->taskId] as $worker) {
+                  $aliveWorkerIds[] = $worker->id;
+                }
+                // Find the dead process id and regengerate a new process
+                $forkWorkerIds = array_diff(range(1, $task->count), $aliveWorkerIds);
+                foreach ($forkWorkerIds as $forkWorkerId) {
+                  $this->fork($task, $forkWorkerId);
                 }
             }
             
@@ -421,7 +438,7 @@ class ProcessPool extends Process
      */
     public function checkErrors()
     {
-        if (static::SHUTDOWN != $this->status) {
+        if (self::SHUTDOWN != self::$status) {
             $errors    = error_get_last();
             if ($errors && ($errors['type'] === E_ERROR ||
                     $errors['type'] === E_PARSE ||
@@ -429,7 +446,7 @@ class ProcessPool extends Process
                     $errors['type'] === E_COMPILE_ERROR ||
                     $errors['type'] === E_RECOVERABLE_ERROR)
             ) {
-                ProcessException::error('Process ['. posix_getpid() .'] process terminated with ERROR: ' . static::getErrorType($errors['type']) . " \"{$errors['message']} in {$errors['file']} on line {$errors['line']}\"");
+                ProcessException::error('Process ['. posix_getpid() .'] process terminated with ERROR: ' . self::getErrorType($errors['type']) . " \"{$errors['message']} in {$errors['file']} on line {$errors['line']}\"");
             }
         }
     }
@@ -481,7 +498,7 @@ class ProcessPool extends Process
      *
      * @param $text string
      */
-    public static function isJsonStr($text) {
+    public static function isJson($text) {
         if(is_string($text)) {
             @json_decode($text); return (json_last_error() === JSON_ERROR_NONE);
         }

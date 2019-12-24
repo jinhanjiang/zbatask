@@ -12,6 +12,20 @@ use Closure;
 class Worker extends Process
 {
 	/**
+	 * @version 0.1.1
+	 * The method that is exectued before the process start executing the task.
+	 * currently only executed once in the current process
+	 */
+	public $onWorkerStart = null;
+
+	/** 
+	 * @version 0.1.1
+	 * The method that is exectued after the process end executing the task.
+	 * currently only executed once in the current process
+	 */ 
+	public $onWorkerStop = null;
+
+	/**
 	 * construct function
 	 * @param array $config ['pid'=>1222, 'type'=>'worker', 'pipe_dir'=>'/tmp/']
 	 */
@@ -32,8 +46,18 @@ class Worker extends Process
 	 */
 	public function hangup(Closure $closure) 
 	{
+		if($this->onWorkerStart && is_callable($this->onWorkerStart)) {
+			try {
+                call_user_func($this->onWorkerStart, $this);
+            } catch (\Exception $ex) {
+            	ProcessException::error("worker: {$this->name}, onWorkerStart, msg:{$ex->getMessage()}, file:{$ex->getFile()}, line:{$ex->getLine()}");
+            }
+		} 
 		while(true)
 		{
+            // Calls signal handlers for pending signals again.
+            pcntl_signal_dispatch();
+
 			// business logic
 			$closure($this);
 
@@ -44,7 +68,8 @@ class Worker extends Process
 			if(self::$currentExecuteTimes >= self::$maxExecuteTimes) $this->workerExit();
 
 			// handle pipe nsg
-			if($this->signal = $this->pipeRead()) $this->dispatchSig();
+			if($signal = $this->pipeRead()) $this->signal = $signal;
+			$this->dispatchSig();
 
 			// increment 1
 			++ self::$currentExecuteTimes;
@@ -60,11 +85,13 @@ class Worker extends Process
 	 */
 	private function dispatchSig()
 	{
+		if(! $this->signal) return false;
 		switch($this->signal) {
 			case 'reload': $this->workerExitFlag = true; break;
 			case 'stop': $this->workerExitFlag = true; break;
 			default: break;
 		}
+		$this->signal = '';
 	}
 
 	/**
@@ -72,7 +99,15 @@ class Worker extends Process
 	 * @return void
 	 */
 	private function workerExit() {
-		$this->clearPipe(); exit;
+		$this->clearPipe(); 
+		if($this->onWorkerStop && is_callable($this->onWorkerStop)) {
+			try {
+                call_user_func($this->onWorkerStop, $this);
+            } catch (\Exception $ex) {
+            	ProcessException::error("worker: {$this->name}, onWorkerStop, msg:{$ex->getMessage()}, file:{$ex->getFile()}, line:{$ex->getLine()}");
+            }
+		}
+		exit;
 	}
 
 }

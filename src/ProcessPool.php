@@ -1,5 +1,15 @@
 <?php
-
+/**
+ * This file is part of zba.
+ *
+ * Licensed under The MIT License
+ * For full copyright and license information, please see the MIT-LICENSE.txt
+ * Redistributions of files must retain the above copyright notice.
+ *
+ * @author    jinhanjiang<jinhanjiang@foxmail.com>
+ * @copyright jinhanjiang<jinhanjiang@foxmail.com>
+ * @license   http://www.opensource.org/licenses/mit-license.php MIT License
+ */
 namespace Zba;
 
 use Zba\Process;
@@ -19,7 +29,7 @@ class ProcessPool extends Process
      * version
      * @var string
      */
-    public static $version = '0.1.1';
+    public static $version = '0.1.2';
 
     /**
      * worker process objects
@@ -216,7 +226,11 @@ class ProcessPool extends Process
      */
     private function execFork()
     {
-        foreach(self::$tasks as $task) {
+        foreach(self::$tasks as $key=>$task) {
+            if(isset($this->env[$task->name])) {
+                $task->envConfig = $this->env[$task->name];
+                self::$tasks[$key] = $task;
+            }
             foreach(range(1, $task->count) as $id) {
                 $this->fork($task, $id);
             }           
@@ -441,12 +455,15 @@ class ProcessPool extends Process
         if (self::SHUTDOWN != self::$status) {
             $errors    = error_get_last();
             if ($errors && ($errors['type'] === E_ERROR ||
+                    $errors['type'] === E_WARNING ||
                     $errors['type'] === E_PARSE ||
                     $errors['type'] === E_CORE_ERROR ||
                     $errors['type'] === E_COMPILE_ERROR ||
+                    $errors['type'] === E_USER_ERROR ||
+                    $errors['type'] === E_USER_WARNING ||
                     $errors['type'] === E_RECOVERABLE_ERROR)
             ) {
-                ProcessException::error('Process ['. posix_getpid() .'] process terminated with ERROR: ' . self::getErrorType($errors['type']) . " \"{$errors['message']} in {$errors['file']} on line {$errors['line']}\"");
+                ProcessException::error('Process ['. posix_getpid() .'] process terminated with : ' . self::getErrorType($errors['type']) . " \"{$errors['message']} in {$errors['file']} on line {$errors['line']}\"");
             }
         }
     }

@@ -1,5 +1,16 @@
 #!/usr/local/php/bin/php
 <?php
+/**
+ * This file is part of zba.
+ *
+ * Licensed under The MIT License
+ * For full copyright and license information, please see the MIT-LICENSE.txt
+ * Redistributions of files must retain the above copyright notice.
+ *
+ * @author    jinhanjiang<jinhanjiang@foxmail.com>
+ * @copyright jinhanjiang<jinhanjiang@foxmail.com>
+ * @license   http://www.opensource.org/licenses/mit-license.php MIT License
+ */
 use Zba\ProcessPool;
 use Zba\Task;
 
@@ -129,6 +140,7 @@ PHP_CODE;
             die("\033[33mZba already running\033[0m\n");
         }
     } else if ($command !== 'start' && $command !== 'reload') {
+    	if($masterPid) @unlink(ProcessPool::getConfigFile('pid'));	
         die("\033[33mZba not run\033[0m\n");
     }
 

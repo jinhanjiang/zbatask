@@ -1,5 +1,15 @@
 <?php
-
+/**
+ * This file is part of zba.
+ *
+ * Licensed under The MIT License
+ * For full copyright and license information, please see the MIT-LICENSE.txt
+ * Redistributions of files must retain the above copyright notice.
+ *
+ * @author    jinhanjiang<jinhanjiang@foxmail.com>
+ * @copyright jinhanjiang<jinhanjiang@foxmail.com>
+ * @license   http://www.opensource.org/licenses/mit-license.php MIT License
+ */
 namespace Zba;
 
 use Zba\ProcessException;
@@ -22,7 +32,7 @@ class Timer
     }
 
     public static function defineSigHandler() {
-        pcntl_alarm(1); self::tick();
+        pcntl_alarm(1); self::loop();
     }
 
     public static function add($interval, $func, $args = array(), $persistent = true)
@@ -39,7 +49,11 @@ class Timer
         return true;
     }
 
-    public static function tick() {
+    public static function del() {
+        self::$tasks = array(); pcntl_alarm(0);
+    }
+
+    public static function loop() {
         if(! self::$tasks) {
             pcntl_alarm(0); return false;
         }
@@ -60,9 +74,5 @@ class Timer
                 unset(self::$tasks[$runtime]);
             }
         }
-    }
-
-    public static function del() {
-        self::$tasks = array(); pcntl_alarm(0);
     }
 }

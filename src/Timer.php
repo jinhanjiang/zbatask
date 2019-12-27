@@ -31,8 +31,10 @@ class Timer
         pcntl_signal(SIGALRM, array('\Zba\Timer', 'defineSigHandler'), false);
     }
 
-    public static function defineSigHandler() {
-        pcntl_alarm(1); self::loop();
+    public static function defineSigHandler($signal = 0) {
+        if(SIGALRM == $signal) {
+            pcntl_alarm(1); self::loop();
+        }
     }
 
     public static function add($interval, $func, $args = array(), $persistent = true)

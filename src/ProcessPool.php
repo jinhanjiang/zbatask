@@ -15,7 +15,6 @@ namespace Zba;
 use Zba\Process;
 use Zba\Worker;
 use Zba\Task;
-use Zba\Timer;
 use Zba\ProcessException;
 use Exception;
 use Closure;
@@ -29,7 +28,7 @@ class ProcessPool extends Process
      * version
      * @var string
      */
-    public static $version = '0.1.2';
+    public static $version = '0.1.3';
 
     /**
      * worker process objects
@@ -273,7 +272,6 @@ class ProcessPool extends Process
                             ? $this->env['config']['max_execute_times'] : 0,
                         'name'=>$task->name.'[Worker]'
                     ]);
-                    Timer::del();
                     $worker->id = $id;
                     $worker->pipeCreate();
                     $worker->onWorkerStart = $task->onWorkerStart;
@@ -310,7 +308,6 @@ class ProcessPool extends Process
         foreach(self::$signalSupport as $sig) {
             pcntl_signal($sig, ['\Zba\ProcessPool', 'defineSigHandler'], false);
         }
-        Timer::start();
     }
 
     /**

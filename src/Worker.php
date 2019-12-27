@@ -12,6 +12,7 @@
  */
 namespace Zba;
 
+use Zba\Timer;
 use Zba\Process;
 use Zba\ProcessException;
 use Closure;
@@ -56,6 +57,7 @@ class Worker extends Process
 	 */
 	public function hangup(Closure $closure) 
 	{
+		Timer::start();
 		if($this->onWorkerStart && is_callable($this->onWorkerStart)) {
 			try {
                 call_user_func($this->onWorkerStart, $this);

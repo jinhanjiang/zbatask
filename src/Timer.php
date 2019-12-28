@@ -61,7 +61,7 @@ class Timer
         }
         $now = time();
         foreach (self::$tasks as $runtime => $data) {
-            if ($now >= $time) {
+            if ($now >= $runtime) {
                 foreach ($data as $index => $task) {
                     list($func, $args, $persistent, $interval) = $task;
                     try {

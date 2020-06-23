@@ -41,6 +41,28 @@ class DefaultTask extends Task
 		parent::__construct();
 	}
 
+	public function onWorkerStart() 
+	{
+		return function(Process $worker) 
+		{
+			// if you start multiple processes, please execute the scheduled task in the first process
+			if(1 == $worker->id) {
+				Timer::add(1, function(){
+					file_put_contents(__DIR__."/w.log", date('Y-m-d H:i:s').PHP_EOL, 8);
+				});
+			}
+			file_put_contents(__DIR__."/w-{$worker->pid}.log", $worker->id.'-Worker Start'.PHP_EOL, 8);
+		};
+	}
+
+	public function onWorkerStop() 
+	{
+		return function(Process $worker) 
+		{
+			file_put_contents(__DIR__."/w-{$worker->pid}.log", $worker->id.'-Worker Stop'.PHP_EOL, 8);
+		};
+	}
+
 	public function run()
 	{
 		return function(Process $worker) 

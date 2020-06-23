@@ -19,6 +19,7 @@ namespace Task;
 
 use Zba\Process;
 use Zba\Task;
+use Zba\Timer;
 
 class DefaultTask extends Task
 {

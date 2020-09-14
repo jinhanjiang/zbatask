@@ -39,7 +39,7 @@ function autoload($class)
 	$class = implode('\\', $classInfo);
 	$class = str_replace('zba', 'src', $class);
 	$classFile = __DIR__.'/'.str_replace('\\', '/', $class).'.php';
-	require($classFile);
+	is_file($classFile) && require($classFile);
 }
 
 /**

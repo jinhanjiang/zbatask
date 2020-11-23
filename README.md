@@ -4,7 +4,7 @@ Multi-process task framework for PHP.
 Php version requires 5.4+, support php7
 The program can run under linux and mac system, you need to install php extension pcntl, posix
 
-You first need to create the task you want to perform, and you can quickly create an instance through the command.
+First you need to create the task you want to perform, and you can quickly create an instance through the command.
 
 ```
 ./zba --create-default-task-file
@@ -160,4 +160,125 @@ Dynamically adjust the number of processes by task，
 
 	.....
 }
+```
+
+
+Example2
+```
+<?php
+namespace Task;
+
+use \RedisClient;
+use \RedisMQClient;
+use Zba\Process;
+use Zba\Task;
+use Zba\Timer;
+
+/**
+ * This is example
+ */
+class ExampleTask extends Task
+{
+	public function __construct() {
+		$this->count = 2; // Minimum number of processes to start
+		$this->maxCount = 5; // Maximum number of processes started
+		$this->queryLimitCount = 0; // The number of continuous queries to limit data
+		$this->isMaxProcess = false; // Whether to adjust to the maximum process
+		// Other configurate
+		$this->nextSleepTime = 0;
+		$this->name = 'ExampleTask';
+		$this->queueName = 'QUEUE_TASK_EXAMPLE';
+		$this->closure = $this->run();
+		parent::__construct();
+	}
+
+	public function onWorkerStart() 
+	{
+		return function(Process $worker) 
+		{
+			// Start the timer in the first process
+			if(1 == $worker->id) 
+			{
+				Timer::add(5, function() use($worker) {
+
+					// If the task queue length is 0, there is no data in the queue, and needs to be supplemented
+					$qlen = RedisMQClient::me()->size($this->queueName);
+					if($qlen == 0) {
+						// Get lock
+						$lockVal = md5($worker->pid.'|'.getMacAddr()); $lockName = $this->queueName.'_LOCK';
+						$flag = RedisClient::me()->setnx($lockName, $lockVal, 15); // The lock is automatically released after 15 seconds
+						if($flag) // Successed lock
+						{
+							$limit = 500;
+							// Here you need to instantiate the database object
+							$tasks = $db->select("SELECT * FROM `XXX` WHERE `xxx`='xxx' LIMIT {$limit}");
+
+							if(is_array($tasks) && ($ct = count($tasks)) > 0)
+							{
+								$qdata = array(
+									'id'=>'xxx'
+								)
+								// Put the queried data into the queue 
+								RedisMQClient::me()->put($this->queueName, $qdata)
+							}
+
+							// Set whether to increase the number of processes to the maximum
+							if($limit == $ct) { // Continue to query limit data, then start the maximum number of processes
+								if($this->fullProcessCount < 5) $this->fullProcessCount ++;
+							}
+							else {
+								if($this->fullProcessCount > 0) $this->fullProcessCount --;
+							}
+
+							unset($tasks);
+						}
+					}
+					
+				});
+
+				// Timing adjustment of the number of processes
+				Timer::add(15, function() use($worker) {
+					if($this->fullProcessCount > 0 && ! $this->isFullProcess) {
+						// The maximum number of processes, and the current state is not the maximum process
+						$worker->adjustProcessCount($this->maxCount);
+					}
+					else if($this->fullProcessCount == 0 && $this->isFullProcess) {
+						// The minimum number of processes, and the current state is not the minimum process
+						$worker->adjustProcessCount($this->count);
+					}
+				});
+			}
+		};
+	}
+
+	public function onWorkerStop() 
+	{
+		return function(Process $worker) 
+		{
+			// file_put_contents(__DIR__."/w-{$worker->pid}.log", $worker->id.'-Worker Stop'.PHP_EOL, 8);
+		};
+	}
+
+	public function run()
+	{
+		return function(Process $worker) 
+		{
+			$nowTime = time(); $delayTime = strtotime('+1 sec'); // Porcesses seelp 1s
+			if($this->nextSleepTime == 0) $this->nextSleepTime = $delayTime;
+			if($this->nextSleepTime < $nowTime)
+			{
+				$qdata = RedisMQClient::me()->get($this->queueName);
+				if($qdata && $qdata['id'])
+				{
+					// Process processing business logic
+
+				}
+				
+				// file_put_contents(__DIR__."/w-{$worker->pid}.log", date('Y-m-d H:i:s').PHP_EOL, 8);
+				$this->nextSleepTime = strtotime('+1 sec');
+			}
+		};
+	}
+}
+
 ```

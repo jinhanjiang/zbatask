@@ -28,7 +28,7 @@ class ProcessPool extends Process
      * version
      * @var string
      */
-    public static $version = '0.1.3';
+    public static $version = '0.1.4';
 
     /**
      * worker process objects
@@ -41,14 +41,6 @@ class ProcessPool extends Process
      * @var array
      */
     private static $tasks = [];
-
-    /**
-     * the pool for the worker that will be handle by the signal
-     * signal: string reload / stop
-     * pool: array [Process]
-     * @var array
-     */
-    private static $waitSignalProcessPool = ['signal'=>''];
 
     /**
      * env config
@@ -118,10 +110,6 @@ class ProcessPool extends Process
     {
         $file = '';
         switch($config) {
-            // Communication files with the main process
-            case 'communication': $file = dirname(__DIR__) . "/.zba.chat"; break;
-            // statistics process info file
-            case 'statistics': $file = dirname(__DIR__) . "/.zba.status"; break;
             // master pid save path
             default: $file = dirname(__DIR__) . "/zba.pid"; break;
         }
@@ -202,7 +190,7 @@ class ProcessPool extends Process
     {
         // init master instance
         $masterPid = posix_getpid();
-        if (false === @file_put_contents(self::getConfigFile('pid'), $masterPid)) {
+        if (false === @file_put_contents(self::getConfigFile('pid'), $masterPid.'|'.self::$master->getPipeFile())) {
             ProcessException::error('can not save pid to '.$masterPid);
         }
         self::$master->pid = $masterPid;
@@ -273,9 +261,11 @@ class ProcessPool extends Process
                         'name'=>$task->name.'[Worker]'
                     ]);
                     $worker->id = $id;
+                    $worker->taskId = $task->taskId;
                     $worker->pipeCreate();
                     $worker->onWorkerStart = $task->onWorkerStart;
                     $worker->onWorkerStop = $task->onWorkerStop;
+                    $worker->masterProcessPipeFile = self::$master->getPipeFile();
                     $worker->hangup($task->closure);
                 } catch(Exception $ex) {
                     ProcessException::error("task:{$task->name}, msg:{$ex->getMessage()}, file:{$ex->getFile()}, line:{$ex->getLine()}");
@@ -291,6 +281,7 @@ class ProcessPool extends Process
                         'pid'=>$pid, // child process pid
                     ]);
                     $worker->id = $id;
+                    $worker->taskId = $task->taskId;
                     self::$workers[$task->taskId][$pid] = $worker;
                 } catch(Exception $ex) {
                     ProcessException::error("task:{$task->name}, msg:{$ex->getMessage()}, file:{$ex->getFile()}, line:{$ex->getLine()}");
@@ -323,55 +314,15 @@ class ProcessPool extends Process
         {
             // reload signal
             case self::$signalSupport['reload']:
-                $processCounts = array();
-                if(is_file(self::getConfigFile('communication')))
-                {
-                    // Parse the command to the main process.
-                    $communicationContent = @file_get_contents(self::getConfigFile('communication'));
-                    
-                    @unlink(self::getConfigFile('communication'));
-                    $command = self::isJson($communicationContent) 
-                        ? json_decode($communicationContent, true) : [];
-                    if(isset($command['command']) 
-                        && is_scalar($command['command']))
-                    {
-                        switch ($command['command']) {
-                            // {"command":"setProcessCount","processInfos":[{"name":"DefaultTask","count":3}, ...]}
-                            case 'setProcessCount':
-                                if(is_array($command['processInfos'])) 
-                                    foreach ($command['processInfos'] as $processInfo) 
-                                {
-                                    if(isset($processInfo['name']) 
-                                        && $processInfo['count'] > 0) 
-                                        $processCounts[$processInfo['name']] = intval($processInfo['count']);
-                                }
-                                break;
-                        }
-                    }
-                }
-                $isAllReload = count($processCounts) > 0 ? false : true;
                 // push reload signal to the worker processes from the master process
                 foreach(self::$workers as $taskId => $workers) 
                 {
                     $isReload = isset(self::$tasks[$taskId]->reload) ? self::$tasks[$taskId]->reload : true;
                     if(! $isReload) continue;
-
-                    $allowReload = false;
-                    if($isAllReload) $allowReload = true;
-                    else
-                    {
-                        if(isset($processCounts[self::$tasks[$taskId]->name])) { 
-                            self::$tasks[$taskId]->count = $processCounts[self::$tasks[$taskId]->name]; 
-                            $allowReload = true;
-                        }
-                    }
-                    if($allowReload) foreach($workers as $pid => $worker) {  
-                        $worker->pipeWrite('reload');
+                    foreach($workers as $pid => $worker) {  
+                        $worker->pipeWrite('stop');
                     }
                 }
-                self::$waitSignalProcessPool = [
-                    'signal'=>'reload',
-                ];
                 break;
             case self::$signalSupport['int']:
             case self::$signalSupport['terminate']://master process exit
@@ -404,10 +355,53 @@ class ProcessPool extends Process
 
         // Register shutdown function for checking errors.
         register_shutdown_function(array($this, 'checkErrors'));
+
+        // @version 0.1.4
+        // deal with signal for the worker process
+        // {"action":"setProcessCount", "taskName":"DefaultTask", "count":3}
+        // {"action":"setProcessCount", "taskId":"8ceff40749e427439b566fcda12f8ff7", "count":3}
+        $dealWithSignal = function($signals=array()) 
+        {
+            if($signals && is_array($signals))
+                foreach($signals as $signal) {
+                if(self::isJson($signal)) 
+                {
+                    $json = json_decode($signal, true);
+                    // Get taskId by task name
+                    if(isset($json['taskName'])) {
+                        foreach(self::$tasks as $task) {
+                            if($task->name == $json['taskName']) {
+                                $json['taskId'] = $task->taskId; break;
+                            }
+                        }
+                    }
+                    switch ($json['action']) {
+                        case 'setProcessCount':
+                            if(isset($json['taskId']) && isset(self::$tasks[$json['taskId']])) {
+                                // Check the process count
+                                $count = (int)$json['count'];
+                                $count = $count <= 0 ? 1 : ($count > 1000 ? 1000 : $count);
+                                self::$tasks[$json['taskId']]->count = $count;
+                                // Adjust process count
+                                if(isset(self::$workers[$json['taskId']])) 
+                                    foreach(self::$workers[$json['taskId']] as $pid => $worker) {
+                                    if($worker->id > $count) {
+                                        $worker->pipeWrite('stop');
+                                    }
+                                }
+                            }
+                            break;
+                    }
+                }
+            }
+        };
         while(true)
         {
             // Calls signal handlers for pending signals again.
             pcntl_signal_dispatch();
+
+            // handle pipe msg
+            $this->pipeRead($dealWithSignal);
 
             // Prophylactic subprocesses become zombie processes.
             // pcntl_wait($status)

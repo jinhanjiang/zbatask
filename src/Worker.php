@@ -23,6 +23,12 @@ use Closure;
 class Worker extends Process
 {
 	/**
+	 * @version 0.1.4
+	 * The task id
+	 */
+	public $taskId = '';
+
+	/**
 	 * @version 0.1.1
 	 * The method that is exectued before the process start executing the task.
 	 * currently only executed once in the current process
@@ -35,6 +41,14 @@ class Worker extends Process
 	 * currently only executed once in the current process
 	 */ 
 	public $onWorkerStop = null;
+
+
+	/**
+	 * @version 0.1.4
+	 * master process pipe file path
+	 * @var string
+	 */
+	public $masterProcessPipeFile = '';
 
 	/**
 	 * construct function
@@ -65,6 +79,18 @@ class Worker extends Process
             	ProcessException::error("worker: {$this->name}, onWorkerStart, msg:{$ex->getMessage()}, file:{$ex->getFile()}, line:{$ex->getLine()}");
             }
 		} 
+
+		// deal with signal for the worker process
+		$dealWithSignal = function($signals=array()) {
+			if($this->workerExitFlag) return false;
+			// parse signal
+			if($signals && is_array($signals))
+				foreach($signals as $signal) {
+				if('stop' == $signal) {
+					$this->workerExitFlag = true; break;
+				}
+			}
+		};
 		while(true)
 		{
             // Calls signal handlers for pending signals again.
@@ -79,31 +105,15 @@ class Worker extends Process
 			// check max execute time
 			if(self::$currentExecuteTimes >= self::$maxExecuteTimes) $this->workerExit();
 
-			// handle pipe nsg
-			if($signal = $this->pipeRead()) $this->signal = $signal;
-			$this->dispatchSig();
-
+			// handle pipe msg
+			$this->pipeRead($dealWithSignal);
+			
 			// increment 1
 			++ self::$currentExecuteTimes;
 
 			// prevent CPU utilization from reaching 100%.
 			usleep(self::$hangupLoopMicrotime);
 		}
-	}
-
-	/**
-	 * dispatch signal for the worker process
-	 * @return void
-	 */
-	private function dispatchSig()
-	{
-		if(! $this->signal) return false;
-		switch($this->signal) {
-			case 'reload': $this->workerExitFlag = true; break;
-			case 'stop': $this->workerExitFlag = true; break;
-			default: break;
-		}
-		$this->signal = '';
 	}
 
 	/**
@@ -120,6 +130,22 @@ class Worker extends Process
             }
 		}
 		exit;
+	}
+
+	/**
+	 * adjust process count
+	 * @return void
+	 */
+	public function adjustProcessCount($count=1) {
+		if(! $this->masterProcessPipeFile) return false;
+		$this->pipeWrite(json_encode(
+			array(
+				'action'=>'setProcessCount',
+				'taskId'=>$this->taskId,
+				'count'=>$count,
+			)
+		), $this->masterProcessPipeFile);
+		return true;
 	}
 
 }

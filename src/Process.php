@@ -71,6 +71,14 @@ abstract class Process
 	protected $pipeFile = '';
 
 	/**
+	 * @version 0.1.4
+	 * pipe temp cache
+	 *
+	 * @var string
+	 */
+	protected $pipeTemp = '';
+
+	/**
 	 * the byte size read from pipe
 	 * @var integer
 	 */
@@ -81,12 +89,6 @@ abstract class Process
 	 * @var boolean
 	 */
 	protected $workerExitFlag = false;
-
-	/**
-	 * signal 
-	 * @var string
-	 */
-	protected $signal = '';
 
 	/**
 	 * hangup sleep time unit: microsecond /μs
@@ -146,14 +148,15 @@ abstract class Process
 	 * write msg to the pipe
 	 * @return void
 	 */
-	public function pipeWrite($signal = '') {
-		if(! file_exists($this->pipeFile)) return false;
-		$pipe = fopen($this->pipeFile, 'w');
+	public function pipeWrite($signal = '', $pipeFile = '') {
+		if(! $pipeFile) $pipeFile = $this->pipeFile;
+		if(! file_exists($pipeFile)) return false;
+		$pipe = fopen($pipeFile, 'w');
 		if(! $pipe) {
 			ProcessException::error("{$this->name} pipe open {$this->pipeFile}");
 			return false;
 		}
-		$res = fwrite($pipe, $signal);
+		$res = fwrite($pipe, $signal."\n");
 		if(! $res) {
 			ProcessException::error("{$this->name} pipe write {$this->pipeFile} signal:{$signal}, res:{$res}");
 			return false;
@@ -167,11 +170,9 @@ abstract class Process
 	 * read msg from the pipe
 	 * @param void
 	 */
-	public function pipeRead() {
+	public function pipeRead(Closure $closure = null) {
 		// check pipe
-		while(! file_exists($this->pipeFile)) {
-			usleep(self::$hangupLoopMicrotime);
-		}
+		if(! file_exists($this->pipeFile)) return false;
 		// open pipe
 		do {
 			// fopen() will block if the file to be opened is a fifo, 
@@ -185,10 +186,45 @@ abstract class Process
 		// set pipe switch a non blocking stream
 		// prevent fread / fwrite blocking
 		stream_set_blocking($workerPipe, false);
+		// read data from pipe
+		while(! feof($workerPipe)) {
+			$pipeContent .= fread($workerPipe, $this->readPipeSize);
+			$streamMetaData = stream_get_meta_data($workerPipe);
+	        if($streamMetaData['unread_bytes'] <= 0) break;
+		}
+		// close pipe
+		fclose($workerPipe);
+		// Parse the content read from the pipe
+		$signals = $this->parsePipeContent($pipeContent);
+		// Processing parsed content
+		if($signals && $closure && is_callable($closure)) {
+			$closure($signals);
+		}
+		return true;
+	}
 
-		// read pipe
-		$signal = fread($workerPipe, $this->readPipeSize);
-		return $signal;
+	/**
+	 * @version 0.1.4
+	 * Parse the content read from the pipe
+	 *
+	 * @param $content 
+	 * @return array
+	 */
+	public function parsePipeContent($content)
+	{
+		$content = $this->pipeTemp.$content;
+		$endstr = ''; $datas = array(); 
+		$nowLoop = 0; $maxLoop = 1000;
+		while(true) {
+			if(++$nowLoop > $maxLoop) break; // Prevent endless loop
+			$pos = strpos($content, "\n");
+			if(false === $pos) {
+				$this->pipeTemp = $content; break;
+			}
+			$datas[] = substr($content, 0, $pos);
+			$content = substr($content, $pos + 1);
+		}
+		return $datas;
 	}
 
 	/**
@@ -196,7 +232,7 @@ abstract class Process
 	 * @return viod
 	 */
 	public function clearPipe() {
-		if(! $this->signal) $this->signal = 'stop';
+		$this->workerExitFlag = true;
 		if(file_exists($this->pipeFile) && ! unlink($this->pipeFile)) {
 			ProcessException::error("{$this->name} pipe clear {$this->pipeFile}");
 			return false;
@@ -216,6 +252,14 @@ abstract class Process
 			return false;
 		}
 		return true;
+	}
+
+	/**
+	 * @version 0.1.4
+	 * get pipe file
+	 */
+	protected function getPipeFile() {
+		return $this->pipeFile;
 	}
 
 	/**

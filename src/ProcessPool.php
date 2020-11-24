@@ -94,7 +94,8 @@ class ProcessPool extends Process
     {
         $newTasks = array();
         if(is_array($tasks)) foreach($tasks as $task) {
-            if($task instanceof Task && is_callable($task->closure)) {
+            if($task instanceof Task && is_callable($task->closure) 
+                && preg_match('/\\'.$task->name.'$/', get_class($task))) {
                 $newTasks[$task->taskId] = $task;
             }
         }

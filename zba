@@ -165,12 +165,21 @@ PHP_CODE;
 	 * $pool->start();
 	 */
 	$tasks = [];
+	// Tasks allowed to run
+	$allowedTasks = defined('ALLOWED_TASKS') ? json_decode(ALLOWED_TASKS, true) : array();
+	// Tasks not allowed to run
+	$disableTasks = defined('DISABLED_TASKS') ? json_decode(DISABLED_TASKS, true) : array(); 
 	if(in_array($command, array('start', 'restart')))
 	{
 		foreach(glob(__DIR__.'/task/*Task.php') as $taskFile)
 		{
 			$classname = "\\Task\\".basename($taskFile, '.php');
-			$tasks[] = new $classname();
+			$task = new $classname();
+
+			if($allowedTasks && ! in_array($task->name, $allowedTasks)) continue;
+			if($disableTasks && in_array($task->name, $disableTasks)) continue;
+
+			$tasks[] = $task;
 		}
 	}
 	switch($command)

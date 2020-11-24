@@ -4,6 +4,17 @@ Multi-process task framework for PHP.
 Php version requires 5.4+, support php7
 The program can run under linux and mac system, you need to install php extension pcntl, posix
 
+
+### Checkout project
+
+Check out the address as follows
+```
+git clone https://github.com/jinhanjiang/zbatask
+```
+
+
+### Quickly generate task template files
+
 First you need to create the task you want to perform, and you can quickly create an instance through the command.
 
 ```
@@ -87,6 +98,8 @@ class DefaultTask extends Task
 ```
 You can write your logic in the run method.
 
+### Operation parameter setting
+
 You can set some parameters to create a file .env the current directory. (This is not necessary)
 ```
 ; current file name is: .env
@@ -105,15 +118,19 @@ pipe_dir: The process channel file holds the directory, and when the process is 
 max_execute_times：After executing N tasks, the process regenerates a new process to prevent the process from taking up too much memory, and the default value of N is: 432000.
 
 
+You can set the specified task to run or not to run, Set the following constant values in config.php
+```
+<?php
+define('ALLOWED_TASKS', json_encode(array('DefaultTask')));
+define('DISABLED_TASKS', json_encode(array('Default1Task', 'Default2Task')));
+```
+
+
+### Task start/stop/restart/reload
 
 Start task:
 ```
 ./zba start
-```
-
-Restart task:
-```
-./zba restart
 ```
 
 Stop task:
@@ -121,10 +138,18 @@ Stop task:
 ./zba stop
 ```
 
+Restart task:
+```
+./zba restart
+```
+
 Reload task:（Recreate the process）
 ```
 ./zba reload
 ```
+
+
+### Dynamically adjust the number of processes
 
 If you perform a queue task, you can check the queue length, reach a certain peak, and dynamically adjust the number of processes based on the start of a task.
 
@@ -132,7 +157,6 @@ You can set the number of tasks dynamically, as follows.
 ```
 ./zba reload DefaultTask 3
 ```
-
 
 Dynamically adjust the number of processes by task，
 ```

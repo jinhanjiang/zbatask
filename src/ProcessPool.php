@@ -418,11 +418,11 @@ class ProcessPool extends Process
                     }
                 }
 
-                $task = self::$tasks[$taskId];
-
                 // If it runs normally, the dead process can be resurrected
                 if(self::$status == self::RUNNING)
                 {
+                    $task = self::$tasks[$taskId];
+
                     // Alive process id
                     $aliveWorkerIds = array();
                     foreach(self::$workers[$task->taskId] as $worker) {

@@ -420,15 +420,19 @@ class ProcessPool extends Process
 
                 $task = self::$tasks[$taskId];
 
-                // Alive process id
-                $aliveWorkerIds = array();
-                foreach(self::$workers[$task->taskId] as $worker) {
-                  $aliveWorkerIds[] = $worker->id;
-                }
-                // Find the dead process id and regengerate a new process
-                $forkWorkerIds = array_diff(range(1, $task->count), $aliveWorkerIds);
-                foreach ($forkWorkerIds as $forkWorkerId) {
-                  $this->fork($task, $forkWorkerId);
+                // If it runs normally, the dead process can be resurrected
+                if(self::$status == self::RUNNING)
+                {
+                    // Alive process id
+                    $aliveWorkerIds = array();
+                    foreach(self::$workers[$task->taskId] as $worker) {
+                      $aliveWorkerIds[] = $worker->id;
+                    }
+                    // Find the dead process id and regengerate a new process
+                    $forkWorkerIds = array_diff(range(1, $task->count), $aliveWorkerIds);
+                    foreach ($forkWorkerIds as $forkWorkerId) {
+                      $this->fork($task, $forkWorkerId);
+                    }
                 }
             }
             

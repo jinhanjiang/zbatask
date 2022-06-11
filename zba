@@ -135,14 +135,14 @@ PHP_CODE;
 	// php -f zba start,  cause $argv like: ['zba', 'start']
 	$command = $argv[1];
 	$masterProcessInfo = is_file(($pidFile = ProcessPool::getConfigFile('pid'))) ? file_get_contents($pidFile) : '';
-	list($masterPid, $masterPipeFile) = explode('|', $masterProcessInfo);
+	list($masterPid, $masterPipeFile) = empty($masterProcessInfo) ? [0, ''] : explode('|', $masterProcessInfo);
     $masterIsAlive = $masterPid && @posix_kill($masterPid, 0) && posix_getpid() != $masterPid;
     // Master is still alive?
     if ($masterIsAlive) {
-        if ($command === 'start') {
+        if (in_array($command, array('start', 'startt'))) {
             die("\033[33mZba already running\033[0m\n");
         }
-    } else if ($command !== 'start' && $command !== 'reload') {
+    } else if (! in_array($command, array('start', 'startt', 'reload'))) {
     	if($masterPid) @unlink(ProcessPool::getConfigFile('pid'));	
         die("\033[33mZba not run\033[0m\n");
     }
@@ -169,7 +169,7 @@ PHP_CODE;
 	$allowedTasks = defined('ALLOWED_TASKS') ? json_decode(ALLOWED_TASKS, true) : array();
 	// Tasks not allowed to run
 	$disableTasks = defined('DISABLED_TASKS') ? json_decode(DISABLED_TASKS, true) : array(); 
-	if(in_array($command, array('start', 'restart')))
+	if(in_array($command, array('start', 'startt', 'restart')))
 	{
 		foreach(glob(__DIR__.'/task/*Task.php') as $taskFile)
 		{
@@ -185,8 +185,12 @@ PHP_CODE;
 	switch($command)
 	{
 		case 'start':
+		case 'startt':
 			try{
 				$pool = new ProcessPool($tasks);
+				if($command == 'startt') {
+					$pool->setDaemon(false);
+				}
 				$pool->start();
 			} catch(Exception $ex) {
 				die("\033[31mmsg:{$ex->getMessage()}, file:{$ex->getFile()}, line:{$ex->getLine()}\033[0m\n");

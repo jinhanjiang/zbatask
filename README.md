@@ -131,6 +131,9 @@ define('DISABLED_TASKS', json_encode(array('Default1Task', 'Default2Task')));
 Start task:
 ```
 ./zba start
+
+# Terminal doest not exit
+./zba startt 
 ```
 
 Stop task:

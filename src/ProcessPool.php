@@ -28,7 +28,7 @@ class ProcessPool extends Process
      * version
      * @var string
      */
-    public static $version = '0.1.4';
+    public static $version = '0.1.5';
 
     /**
      * worker process objects
@@ -49,14 +49,21 @@ class ProcessPool extends Process
     private $env = [];
 
     /**
+     * run daemon
+     * @var bool
+     * @version 0.1.5
+     */
+    private $daemon = true;
+
+    /**
      * support linux signal (The signal received by the main process.)
      * @var array
      */
-    private static $signalSupport = [
-        'reload' => SIGUSR1,
-        'status' => SIGUSR2,
-        'terminate' => SIGTERM,
-        'int' => SIGINT
+    public static $signalSupport = [
+        'reload' => SIGUSR1, // 10
+        'status' => SIGUSR2, // 12
+        'terminate' => SIGTERM, // 15 
+        'int' => SIGINT, // 2 ctrl + c
     ];
 
     /**
@@ -115,6 +122,14 @@ class ProcessPool extends Process
             default: $file = dirname(__DIR__) . "/zba.pid"; break;
         }
         return $file;
+    }
+
+    /**
+     * Set whether to run in the background
+     * @version 0.1.5
+     */
+    public function setDaemon($daemon) {
+        $this->daemon = $daemon;
     }
 
     public function start()
@@ -336,7 +351,6 @@ class ProcessPool extends Process
                 }
                 // clear pipe
                 self::$master->clearPipe();
-
                 // clear master pid file
                 if(is_file(self::getConfigFile('pid'))) @unlink(self::getConfigFile('pid'));
                 // kill -9 master process
@@ -525,6 +539,7 @@ class ProcessPool extends Process
      */
     protected function daemonize()
     {
+        if(! $this->daemon) return false;
         umask(0);
         $pid = pcntl_fork();
         if (-1 === $pid) {

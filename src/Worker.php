@@ -65,12 +65,37 @@ class Worker extends Process
 	}
 
 	/**
+	 * @version 0.1.5
+     * register signal handler
+     * @return void
+     */
+    private function registerSigHandler()
+    {
+        foreach(ProcessPool::$signalSupport as $sig) {
+            pcntl_signal($sig, ['\Zba\Worker', 'defineSigHandler'], false);
+        }
+    }
+	
+	/**
+	 * @version 0.1.5
+     * define signal handler
+     * @param integer $signal
+     * @return void
+     */
+	public static function defineSigHandler($signal = 0) {
+		// do not handle signals
+    }
+
+	/**
 	 * the worker hangup function
 	 * @param Closure $closure
 	 * @return void
 	 */
 	public function hangup(Closure $closure) 
 	{
+		// register quit sigle handler
+		$this->registerSigHandler();
+		// register timer sigle handler
 		Timer::start();
 		if($this->onWorkerStart && is_callable($this->onWorkerStart)) {
 			try {

@@ -307,5 +307,78 @@ class ExampleTask extends Task
 		};
 	}
 }
+```
+
+### Build Docker image
+
+We can package the image based on the current zbatask version, for example:
 
 ```
+docker build -t zbatask:0.1.5 .
+```
+
+Dockerfile
+```
+FROM php:7.4-cli-alpine
+MAINTAINER JinHanJiang <jinhanjiang@foxmail.com>
+WORKDIR /opt
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.ustc.edu.cn/g' /etc/apk/repositories && \
+    apk update && \
+    apk add --no-cache --virtual mypacks \
+        autoconf \  
+        build-base \
+        linux-headers \
+        file \
+        g++ \
+        gcc \
+        make \
+        pkgconf \
+        re2c \
+        coreutils && \
+    apk add --no-cache \ 
+        curl-dev \
+        libevent-dev \
+        libressl-dev \
+        openldap-dev
+RUN set -x && \
+    docker-php-ext-install sockets pcntl pdo_mysql curl && \
+    pecl install event && \
+    docker-php-ext-enable --ini-name event.ini event && \
+    pecl install redis && \
+    docker-php-ext-enable --ini-name redis.ini redis && \
+    mkdir -p /opt/zbatask
+RUN apk del mypacks    
+
+COPY src/ /opt/zbatask/src
+COPY task/ /opt/zbatask/task
+COPY zba /opt/zbatask/zba
+
+VOLUME ["/opt/zbatask"]
+CMD ["php", "-f", "/opt/zbatask/zba", "startt"]
+```
+
+If we use it in combination with the doba framework, we can package a new image
+
+```
+docker build -t demo:0.1 .
+```
+
+Dockerfile
+```
+FROM zbatask:0.1.5
+
+RUN set -x && \
+    apk add --no-cache \ 
+        git && \
+    rm -f /opt/zbatask/task/*.php && \
+    cd /opt && \
+    git clone https://github.com/jinhanjiang/doba
+
+ADD systask/config.php /opt/zbatask/config.php
+ADD systask/.env /opt/zbatask/.env
+COPY systask/task/ /opt/zbatask/task
+COPY common /opt/common
+```
+
+
+

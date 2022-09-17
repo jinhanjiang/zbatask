@@ -101,7 +101,7 @@ class Worker extends Process
 			try {
                 call_user_func($this->onWorkerStart, $this);
             } catch (\Exception $ex) {
-            	ProcessException::error("worker: {$this->name}, onWorkerStart, msg:{$ex->getMessage()}, file:{$ex->getFile()}, line:{$ex->getLine()}");
+            	ProcessException::info("worker: {$this->name}, onWorkerStart, msg:{$ex->getMessage()}, file:{$ex->getFile()}, line:{$ex->getLine()}");
             }
 		} 
 
@@ -151,7 +151,7 @@ class Worker extends Process
 			try {
                 call_user_func($this->onWorkerStop, $this);
             } catch (\Exception $ex) {
-            	ProcessException::error("worker: {$this->name}, onWorkerStop, msg:{$ex->getMessage()}, file:{$ex->getFile()}, line:{$ex->getLine()}");
+            	ProcessException::info("worker: {$this->name}, onWorkerStop, msg:{$ex->getMessage()}, file:{$ex->getFile()}, line:{$ex->getLine()}");
             }
 		}
 		exit;

@@ -43,7 +43,9 @@ class ProcessException extends Exception
 		self::$logFile = dirname(__DIR__).'/zba.log';
 		$msg = self::decorate($method, $data);
 		error_log($msg, 3, self::$logFile);
-		if('error' === $method) exit;
+		if('error' === $method) {
+			exit;
+		}
 	}
 
 	/**

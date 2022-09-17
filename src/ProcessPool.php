@@ -28,7 +28,7 @@ class ProcessPool extends Process
      * version
      * @var string
      */
-    public static $version = '0.1.5';
+    public static $version = '0.1.6';
 
     /**
      * worker process objects
@@ -284,7 +284,7 @@ class ProcessPool extends Process
                     $worker->masterProcessPipeFile = self::$master->getPipeFile();
                     $worker->hangup($task->closure);
                 } catch(Exception $ex) {
-                    ProcessException::error("task:{$task->name}, msg:{$ex->getMessage()}, file:{$ex->getFile()}, line:{$ex->getLine()}");
+                    ProcessException::info("task:{$task->name}, msg:{$ex->getMessage()}, file:{$ex->getFile()}, line:{$ex->getLine()}");
                 }
                 exit;// worker exit, Avoid the problem that the worker continues to execute the following code.
                 break;
@@ -300,7 +300,7 @@ class ProcessPool extends Process
                     $worker->taskId = $task->taskId;
                     self::$workers[$task->taskId][$pid] = $worker;
                 } catch(Exception $ex) {
-                    ProcessException::error("task:{$task->name}, msg:{$ex->getMessage()}, file:{$ex->getFile()}, line:{$ex->getLine()}");
+                    ProcessException::info("task:{$task->name}, msg:{$ex->getMessage()}, file:{$ex->getFile()}, line:{$ex->getLine()}");
                 }
                 break;
         }
@@ -473,7 +473,7 @@ class ProcessPool extends Process
                     $errors['type'] === E_USER_WARNING ||
                     $errors['type'] === E_RECOVERABLE_ERROR)
             ) {
-                ProcessException::error('Process ['. posix_getpid() .'] process terminated with : ' . self::getErrorType($errors['type']) . " \"{$errors['message']} in {$errors['file']} on line {$errors['line']}\"");
+                ProcessException::info('Process ['. posix_getpid() .'] process terminated with : ' . self::getErrorType($errors['type']) . " \"{$errors['message']} in {$errors['file']} on line {$errors['line']}\"");
             }
         }
     }

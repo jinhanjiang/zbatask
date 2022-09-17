@@ -153,17 +153,18 @@ abstract class Process
 		if(! file_exists($pipeFile)) return false;
 		$pipe = fopen($pipeFile, 'w');
 		if(! $pipe) {
-			ProcessException::error("{$this->name} pipe open {$this->pipeFile}");
+			ProcessException::info("{$this->name} pipe open {$this->pipeFile}");
 			return false;
 		}
 		$res = fwrite($pipe, $signal."\n");
 		if(! $res) {
-			ProcessException::error("{$this->name} pipe write {$this->pipeFile} signal:{$signal}, res:{$res}");
+			ProcessException::info("{$this->name} pipe write {$this->pipeFile} signal:{$signal}, res:{$res}");
 			return false;
 		}
 		if(! fclose($pipe)) {
-			ProcessException::error("{$this->name} pipe close {$this->pipeFile}");
+			ProcessException::info("{$this->name} pipe close {$this->pipeFile}");
 		}
+		return true;
 	}
 
 	/**
@@ -234,7 +235,7 @@ abstract class Process
 	public function clearPipe() {
 		$this->workerExitFlag = true;
 		if(file_exists($this->pipeFile) && ! unlink($this->pipeFile)) {
-			ProcessException::error("{$this->name} pipe clear {$this->pipeFile}");
+			ProcessException::info("{$this->name} pipe clear {$this->pipeFile}");
 			return false;
 		}
 		shell_exec("rm -rf {$this->pipeFile}");
@@ -248,7 +249,7 @@ abstract class Process
 	public function stop() {
 		$this->clearPipe();
 		if(! posix_kill($this->pid, SIGKILL)) {
-			ProcessException::error("{$this->name} stop {$this->pipeFile}");
+			ProcessException::info("{$this->name} stop {$this->pipeFile}");
 			return false;
 		}
 		return true;

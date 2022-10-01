@@ -314,7 +314,7 @@ class ExampleTask extends Task
 We can package the image based on the current zbatask version, for example:
 
 ```
-docker build -t zbatask:0.1.5 .
+docker build -t zbatask:0.1.6 .
 ```
 
 Dockerfile
@@ -365,7 +365,7 @@ docker build -t demo:0.1 .
 
 Dockerfile
 ```
-FROM zbatask:0.1.5
+FROM zbatask:0.1.6
 
 RUN set -x && \
     apk add --no-cache \ 

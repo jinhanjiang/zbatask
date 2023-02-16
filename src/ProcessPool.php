@@ -15,6 +15,7 @@ namespace Zba;
 use Zba\Process;
 use Zba\Worker;
 use Zba\Task;
+use Zba\Timer;
 use Zba\ProcessException;
 use Exception;
 use Closure;
@@ -28,7 +29,7 @@ class ProcessPool extends Process
      * version
      * @var string
      */
-    public static $version = '0.1.6';
+    public static $version = '0.1.7';
 
     /**
      * worker process objects
@@ -279,8 +280,8 @@ class ProcessPool extends Process
                     $worker->id = $id;
                     $worker->taskId = $task->taskId;
                     $worker->pipeCreate();
-                    $worker->onWorkerStart = $task->onWorkerStart;
-                    $worker->onWorkerStop = $task->onWorkerStop;
+                    $worker->setOnWorkerStart($task->onWorkerStart);
+                    $worker->setOnWorkerStop($task->onWorkerStop);
                     $worker->masterProcessPipeFile = self::$master->getPipeFile();
                     $worker->hangup($task->closure);
                 } catch(Exception $ex) {
@@ -346,15 +347,17 @@ class ProcessPool extends Process
                 foreach(self::$workers as $taskId => $workers)
                 {
                     foreach($workers as $pid => $worker) {
-                      $worker->pipeWrite('stop');
+                        $worker->stop();
                     }
                 }
                 // clear pipe
                 self::$master->clearPipe();
                 // clear master pid file
-                if(is_file(self::getConfigFile('pid'))) @unlink(self::getConfigFile('pid'));
+                if(is_file(self::getConfigFile('pid'))) {
+                    @unlink(self::getConfigFile('pid'));
+                }
                 // kill -9 master process
-                exit;
+                exit(0);
                 break;
             default: break; 
         }
@@ -377,35 +380,35 @@ class ProcessPool extends Process
         // {"action":"setProcessCount", "taskId":"8ceff40749e427439b566fcda12f8ff7", "count":3}
         $dealWithSignal = function($signals=array()) 
         {
-            if($signals && is_array($signals))
+            if($signals && is_array($signals)){
                 foreach($signals as $signal) {
-                if(self::isJson($signal)) 
-                {
-                    $json = json_decode($signal, true);
-                    // Get taskId by task name
-                    if(isset($json['taskName'])) {
-                        foreach(self::$tasks as $task) {
-                            if($task->name == $json['taskName']) {
-                                $json['taskId'] = $task->taskId; break;
-                            }
-                        }
-                    }
-                    switch ($json['action']) {
-                        case 'setProcessCount':
-                            if(isset($json['taskId']) && isset(self::$tasks[$json['taskId']])) {
-                                // Check the process count
-                                $count = (int)$json['count'];
-                                $count = $count <= 0 ? 1 : ($count > 1000 ? 1000 : $count);
-                                self::$tasks[$json['taskId']]->count = $count;
-                                // Adjust process count
-                                if(isset(self::$workers[$json['taskId']])) 
-                                    foreach(self::$workers[$json['taskId']] as $pid => $worker) {
-                                    if($worker->id > $count) {
-                                        $worker->pipeWrite('stop');
-                                    }
+                    if(self::isJson($signal)) {
+                        $json = json_decode($signal, true);
+                        // Get taskId by task name
+                        if(isset($json['taskName'])) {
+                            foreach(self::$tasks as $task) {
+                                if($task->name == $json['taskName']) {
+                                    $json['taskId'] = $task->taskId; break;
                                 }
                             }
-                            break;
+                        }
+                        switch ($json['action']) {
+                            case 'setProcessCount':
+                                if(isset($json['taskId']) && isset(self::$tasks[$json['taskId']])) {
+                                    // Check the process count
+                                    $count = (int)$json['count'];
+                                    $count = $count <= 0 ? 1 : ($count > 1000 ? 1000 : $count);
+                                    self::$tasks[$json['taskId']]->count = $count;
+                                    // Adjust process count
+                                    if(isset(self::$workers[$json['taskId']])) 
+                                        foreach(self::$workers[$json['taskId']] as $pid => $worker) {
+                                        if($worker->id > $count) {
+                                            $worker->pipeWrite('stop');
+                                        }
+                                    }
+                                }
+                                break;
+                        }
                     }
                 }
             }
@@ -414,6 +417,9 @@ class ProcessPool extends Process
         {
             // Calls signal handlers for pending signals again.
             pcntl_signal_dispatch();
+
+            // register timer sigle handler
+            Timer::start();
 
             // handle pipe msg
             $this->pipeRead($dealWithSignal);

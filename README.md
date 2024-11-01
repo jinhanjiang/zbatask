@@ -334,6 +334,7 @@ RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.ustc.edu.cn/g' /etc/apk/repositorie
         make \
         pkgconf \
         re2c \
+        tzdata \
         coreutils && \
     apk add --no-cache \ 
         curl-dev \

@@ -67,7 +67,7 @@ class Timer
                     try {
                         call_user_func_array($func, $args);
                     } catch (\Exception $ex) {
-                        ProcessException::info("task:{$func}, msg:{$ex->getMessage()}, file:{$ex->getFile()}, line:{$ex->getLine()}");
+                        ProcessException::info("msg:{$ex->getMessage()}, file:{$ex->getFile()}, line:{$ex->getLine()}");
                     }
                     if ($persistent) {
                         self::add($interval, $func, $args);

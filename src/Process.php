@@ -188,6 +188,7 @@ abstract class Process
         // prevent fread / fwrite blocking
         stream_set_blocking($workerPipe, false);
         // read data from pipe
+        $pipeContent = '';
         while(! feof($workerPipe)) {
             $pipeContent .= fread($workerPipe, $this->readPipeSize);
             $streamMetaData = stream_get_meta_data($workerPipe);

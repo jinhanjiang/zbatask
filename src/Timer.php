@@ -18,7 +18,7 @@ class Timer
 {
     /**
      * Set of tasks to be performed
-     * @var string
+     * @var array
      * array(
      *   'runtime'=>array(array(func, $params, $persistent, interval),array(func, $params, $persistent, interval), ...),
      *   'runtime'=>array(array(func, $params, $persistent, interval),array(func, $params, $persistent, interval), ...)

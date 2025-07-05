@@ -12,9 +12,7 @@
  */
 namespace Zba;
 
-use \Exception;
-
-class ProcessException extends Exception
+class ProcessException extends \Exception
 {
     /**
      * log method support
@@ -38,10 +36,10 @@ class ProcessException extends Exception
     {
         $data = $data[0];
         if(! in_array($method, self::$methodSupport)) {
-            throw new Exception('log method not support', 500);
+            throw new \Exception('log method not support', 500);
         }
         self::$logFile = dirname(__DIR__).'/zba.log';
-        $msg = self::decorate($method, $data);
+        $msg = (string)self::decorate($method, $data);
         error_log($msg, 3, self::$logFile);
         if('error' === $method) {
             exit;
